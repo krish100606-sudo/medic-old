@@ -124,6 +124,10 @@ public class Patient {
         this.user = user;
     }
 
+    public String getName() {
+        return user != null && user.getName() != null ? user.getName() : "Patient";
+    }
+
     public String getPatientId() {
         return patientId;
     }

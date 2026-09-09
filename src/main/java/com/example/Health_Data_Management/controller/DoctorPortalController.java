@@ -65,6 +65,7 @@ public class DoctorPortalController {
         model.addAttribute("statHighPriority", totalHighPriority);
         model.addAttribute("statPendingReview", totalSubmitted);
         model.addAttribute("statVerified", totalVerified);
+        model.addAttribute("todayDate", java.time.LocalDate.now().toString());
 
         return "doctor/dashboard";
     }
@@ -94,6 +95,7 @@ public class DoctorPortalController {
         model.addAttribute("patient", medicalCase.getPatient());
         model.addAttribute("documents", medicalCase.getDocuments());
         model.addAttribute("answers", medicalCase.getAnswers());
+        model.addAttribute("conversationMessages", caseService.getConversationHistory(caseId));
 
         return "doctor/patient-case";
     }

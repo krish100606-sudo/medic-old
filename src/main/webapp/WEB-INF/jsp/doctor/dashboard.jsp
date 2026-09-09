@@ -70,7 +70,7 @@
                 </div>
                 <div>
                     <span class="badge bg-white border text-dark p-2 px-3 shadow-sm">
-                        <i class="bi bi-calendar3 text-primary me-1"></i> Today: ${java.time.LocalDate.now()}
+                        <i class="bi bi-calendar3 text-primary me-1"></i> Today: ${todayDate}
                     </span>
                 </div>
             </div>

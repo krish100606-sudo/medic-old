@@ -35,20 +35,20 @@ public class MedicalCase {
     @Column(nullable = false, length = 30)
     private CasePriority priority = CasePriority.NORMAL;
 
-    @Column(name = "priority_reason", length = 1000)
+    @Column(name = "priority_reason", columnDefinition = "TEXT")
     private String priorityReason;
 
     @Column(name = "red_flags_detected")
     private boolean redFlagsDetected = false;
 
-    @Column(name = "red_flags_details", length = 2000)
+    @Column(name = "red_flags_details", columnDefinition = "TEXT")
     private String redFlagsDetails;
 
     // ---------------- Clinical Intake Fields ----------------
     @Column(name = "chief_complaint", length = 1000)
     private String chiefComplaint;
 
-    @Column(name = "patient_statement", length = 2000)
+    @Column(name = "patient_statement", columnDefinition = "TEXT")
     private String patientStatement;
 
     @Column(length = 255)
@@ -60,41 +60,57 @@ public class MedicalCase {
     @Column(length = 255)
     private String severity;
 
-    @Column(name = "associated_symptoms", length = 2000)
+    @Column(name = "associated_symptoms", columnDefinition = "TEXT")
     private String associatedSymptoms;
 
-    @Column(name = "past_medical_history", length = 3000)
+    @Column(name = "past_medical_history", columnDefinition = "TEXT")
     private String pastMedicalHistory;
 
-    @Column(name = "surgical_history", length = 2000)
+    @Column(name = "surgical_history", columnDefinition = "TEXT")
     private String surgicalHistory;
 
-    @Column(name = "current_medication", length = 3000)
+    @Column(name = "current_medication", columnDefinition = "TEXT")
     private String currentMedication;
 
     @Column(length = 1000)
     private String allergies;
 
-    @Column(name = "family_history", length = 2000)
+    @Column(name = "family_history", columnDefinition = "TEXT")
     private String familyHistory;
 
-    @Column(name = "personal_history", length = 2000)
+    @Column(name = "personal_history", columnDefinition = "TEXT")
     private String personalHistory;
 
-    @Column(length = 3000)
+    @Column(name = "investigations", columnDefinition = "TEXT")
     private String investigations;
 
-    @Column(name = "medical_timeline", length = 4000)
+    @Column(name = "medical_timeline", columnDefinition = "TEXT")
     private String medicalTimeline;
 
-    @Column(name = "structured_summary", length = 6000)
+    @Column(name = "structured_summary", columnDefinition = "TEXT")
     private String structuredSummary;
+
+    // ---------------- AYUSH Dashavidha & Clinical Additions ----------------
+    @Column(name = "dashavidha_assessment", columnDefinition = "TEXT")
+    private String dashavidhaAssessment;
+
+    @Column(name = "prakriti_type", length = 50)
+    private String prakritiType;
+
+    @Column(name = "dosha_imbalance", length = 100)
+    private String doshaImbalance;
+
+    @Column(name = "drug_interactions_json", columnDefinition = "TEXT")
+    private String drugInteractionsJson;
+
+    @Column(name = "digital_signature", columnDefinition = "TEXT")
+    private String digitalSignature;
 
     // ---------------- Doctor Verification Fields ----------------
     @Column(name = "is_doctor_edited")
     private boolean isDoctorEdited = false;
 
-    @Column(name = "doctor_clinical_notes", length = 5000)
+    @Column(name = "doctor_clinical_notes", columnDefinition = "TEXT")
     private String doctorClinicalNotes;
 
     @Column(name = "verified_by_doctor", length = 150)
@@ -416,5 +432,67 @@ public class MedicalCase {
 
     public void setDocuments(List<MedicalDocument> documents) {
         this.documents = documents;
+    }
+
+    public String getDashavidhaAssessment() {
+        return dashavidhaAssessment;
+    }
+
+    public void setDashavidhaAssessment(String dashavidhaAssessment) {
+        this.dashavidhaAssessment = dashavidhaAssessment;
+    }
+
+    public String getPrakritiType() {
+        return prakritiType;
+    }
+
+    public void setPrakritiType(String prakritiType) {
+        this.prakritiType = prakritiType;
+    }
+
+    public String getDoshaImbalance() {
+        return doshaImbalance;
+    }
+
+    public void setDoshaImbalance(String doshaImbalance) {
+        this.doshaImbalance = doshaImbalance;
+    }
+
+    public String getDrugInteractionsJson() {
+        return drugInteractionsJson;
+    }
+
+    public void setDrugInteractionsJson(String drugInteractionsJson) {
+        this.drugInteractionsJson = drugInteractionsJson;
+    }
+
+    public String getDigitalSignature() {
+        return digitalSignature;
+    }
+
+    public void setDigitalSignature(String digitalSignature) {
+        this.digitalSignature = digitalSignature;
+    }
+
+    public List<String[]> getTimelineList() {
+        List<String[]> list = new ArrayList<>();
+        if (medicalTimeline == null || medicalTimeline.isBlank()) {
+            return list;
+        }
+        for (String line : medicalTimeline.split("\n")) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) continue;
+            if (trimmed.contains("|")) {
+                String[] parts = trimmed.split("\\|", 2);
+                list.add(new String[]{parts[0].trim(), parts[1].trim()});
+            } else {
+                list.add(new String[]{"Event", trimmed});
+            }
+        }
+        return list;
+    }
+
+    public String getFormattedCreatedAt() {
+        return createdAt != null ? createdAt.toLocalDate().toString() : "";
     }
 }

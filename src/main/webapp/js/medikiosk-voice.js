@@ -9,6 +9,7 @@ class MediKioskVoice {
     this.targetInputId = options.targetInputId || 'answerInput';
     this.micButtonId = options.micButtonId || 'micBtn';
     this.statusElementId = options.statusElementId || 'voiceStatus';
+    this.waveformId = options.waveformId || 'voiceWaveform';
     this.lang = options.lang || 'en-IN'; // 'en-IN' or 'hi-IN'
     this.recognition = null;
     this.isRecording = false;
@@ -35,6 +36,8 @@ class MediKioskVoice {
       this.updateStatus('Listening... Speak clearly into your microphone.', 'text-primary');
       const micBtn = document.getElementById(this.micButtonId);
       if (micBtn) micBtn.classList.add('recording');
+      const wave = document.getElementById(this.waveformId);
+      if (wave) wave.classList.add('active');
     };
 
     this.recognition.onresult = (event) => {
@@ -45,23 +48,30 @@ class MediKioskVoice {
       const targetInput = document.getElementById(this.targetInputId);
       if (targetInput) {
         targetInput.value = transcript;
-        // Trigger change event
         targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const inputType = document.getElementById('inputType');
+      if (inputType) {
+        inputType.value = 'VOICE';
       }
     };
 
     this.recognition.onerror = (event) => {
       this.isRecording = false;
-      this.updateStatus('Speech recognition error: ' + event.error + '. You can edit or type manually.', 'text-danger');
+      this.updateStatus('Speech recognition: ' + (event.error || 'Ready') + '. You can type or tap options.', 'text-muted');
       const micBtn = document.getElementById(this.micButtonId);
       if (micBtn) micBtn.classList.remove('recording');
+      const wave = document.getElementById(this.waveformId);
+      if (wave) wave.classList.remove('active');
     };
 
     this.recognition.onend = () => {
       this.isRecording = false;
-      this.updateStatus('Voice input captured. You can edit the text if needed.', 'text-success');
+      this.updateStatus('Voice captured. You can edit before continuing.', 'text-success');
       const micBtn = document.getElementById(this.micButtonId);
       if (micBtn) micBtn.classList.remove('recording');
+      const wave = document.getElementById(this.waveformId);
+      if (wave) wave.classList.remove('active');
     };
 
     const micBtn = document.getElementById(this.micButtonId);
@@ -91,6 +101,21 @@ class MediKioskVoice {
       el.className = 'small mt-2 ' + className;
       el.textContent = message;
     }
+  }
+
+  /**
+   * Text-to-Speech: Read question aloud in selected language
+   */
+  speak(text, lang) {
+    if (!('speechSynthesis' in window)) {
+      console.warn('Speech synthesis not supported');
+      return;
+    }
+    window.speechSynthesis.cancel(); // Stop ongoing speech
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang || this.lang;
+    utterance.rate = 0.92; // Slightly slower for clinical clarity
+    window.speechSynthesis.speak(utterance);
   }
 }
 

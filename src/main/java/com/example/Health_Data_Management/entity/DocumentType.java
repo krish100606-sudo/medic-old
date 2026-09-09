@@ -4,6 +4,8 @@ public enum DocumentType {
     PRESCRIPTION,
     BLOOD_REPORT,
     INVESTIGATION,
+    ECG,
+    IMAGING,
     DISCHARGE_SUMMARY,
     OTHER
 }

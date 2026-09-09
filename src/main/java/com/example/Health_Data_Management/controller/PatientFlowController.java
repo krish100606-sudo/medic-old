@@ -3,6 +3,7 @@ package com.example.Health_Data_Management.controller;
 import com.example.Health_Data_Management.entity.*;
 import com.example.Health_Data_Management.repository.PatientRepository;
 import com.example.Health_Data_Management.repository.UserRepository;
+import com.example.Health_Data_Management.service.AdaptiveQuestionService;
 import com.example.Health_Data_Management.service.CaseService;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
@@ -16,7 +17,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Controller
 @RequestMapping("/patient")
@@ -25,16 +28,19 @@ public class PatientFlowController {
     private final PatientRepository patientRepository;
     private final UserRepository userRepository;
     private final CaseService caseService;
+    private final AdaptiveQuestionService adaptiveQuestionService;
 
     private final String uploadDir = "uploads";
 
     public PatientFlowController(
             PatientRepository patientRepository,
             UserRepository userRepository,
-            CaseService caseService) {
+            CaseService caseService,
+            AdaptiveQuestionService adaptiveQuestionService) {
         this.patientRepository = patientRepository;
         this.userRepository = userRepository;
         this.caseService = caseService;
+        this.adaptiveQuestionService = adaptiveQuestionService;
 
         File dir = new File(uploadDir);
         if (!dir.exists()) {
@@ -87,7 +93,9 @@ public class PatientFlowController {
     @PostMapping("/consent")
     public String acceptConsent(
             Authentication authentication,
-            @RequestParam(value = "consent", defaultValue = "false") boolean consent) {
+            @RequestParam(value = "consent", defaultValue = "false") boolean consent,
+            @RequestParam(value = "abhaId", required = false) String abhaId,
+            @RequestParam(value = "digitalSignature", required = false) String digitalSignature) {
         Patient patient = getCurrentPatient(authentication);
         if (patient == null) return "redirect:/login";
 
@@ -97,7 +105,16 @@ public class PatientFlowController {
 
         patient.setConsentAccepted(true);
         patient.setConsentAcceptedAt(LocalDateTime.now());
+        if (abhaId != null && !abhaId.trim().isEmpty()) {
+            patient.setAbhaId(abhaId.trim());
+        }
         patientRepository.save(patient);
+
+        MedicalCase draftCase = caseService.getOrCreateDraftCase(patient);
+        if (digitalSignature != null && !digitalSignature.trim().isEmpty()) {
+            draftCase.setDigitalSignature(digitalSignature.trim());
+            caseService.saveCase(draftCase);
+        }
 
         return "redirect:/patient/language";
     }
@@ -143,13 +160,35 @@ public class PatientFlowController {
 
         MedicalCase medicalCase = caseService.getOrCreateDraftCase(patient);
 
+        Map<String, String> existingAnswers = new HashMap<>();
+        if (medicalCase.getAnswers() != null) {
+            for (CaseAnswer a : medicalCase.getAnswers()) {
+                existingAnswers.put(a.getQuestionCode(), a.getAnswerText());
+            }
+        }
+
+        List<AdaptiveQuestionService.AdaptiveQuestion> questions = adaptiveQuestionService.getQuestionsForCase(
+                medicalCase.getChiefComplaint(), existingAnswers);
+        int totalSteps = questions.isEmpty() ? 10 : questions.size();
+
         if (step < 1) step = 1;
-        if (step > 10) step = 10;
+        if (step > totalSteps) step = totalSteps;
+
+        AdaptiveQuestionService.AdaptiveQuestion currentQuestion = (step >= 1 && step <= questions.size())
+                ? questions.get(step - 1) : null;
+
+        List<ConversationMessage> conversationMessages = caseService.getConversationHistory(medicalCase.getId());
+
+        int progressPercent = totalSteps > 0 ? Math.min(100, (int) Math.round((step * 100.0) / totalSteps)) : 0;
 
         model.addAttribute("patient", patient);
         model.addAttribute("medicalCase", medicalCase);
         model.addAttribute("currentStep", step);
-        model.addAttribute("totalSteps", 10);
+        model.addAttribute("totalSteps", totalSteps);
+        model.addAttribute("progressPercent", progressPercent);
+        model.addAttribute("currentQuestion", currentQuestion);
+        model.addAttribute("questionsList", questions);
+        model.addAttribute("conversationMessages", conversationMessages);
         model.addAttribute("lang", patient.getPreferredLanguage() != null ? patient.getPreferredLanguage() : "English");
 
         return "patient/case-taking";
@@ -177,6 +216,7 @@ public class PatientFlowController {
 
         if (questionCode != null && answerText != null && !answerText.trim().isEmpty()) {
             caseService.saveOrUpdateAnswer(medicalCase.getId(), questionCode, questionText, answerText.trim(), inputType);
+            medicalCase = caseService.getCaseById(medicalCase.getId());
         }
 
         if ("exit".equalsIgnoreCase(action)) {
@@ -188,8 +228,17 @@ public class PatientFlowController {
             return "redirect:/patient/case-taking?step=" + prevStep;
         }
 
+        Map<String, String> existingAnswers = new HashMap<>();
+        if (medicalCase != null && medicalCase.getAnswers() != null) {
+            for (CaseAnswer a : medicalCase.getAnswers()) {
+                existingAnswers.put(a.getQuestionCode(), a.getAnswerText());
+            }
+        }
+        String currentChief = medicalCase != null ? medicalCase.getChiefComplaint() : null;
+        int totalSteps = adaptiveQuestionService.getTotalQuestionCount(currentChief, existingAnswers);
+
         int nextStep = step + 1;
-        if (nextStep > 10) {
+        if (nextStep > totalSteps) {
             return "redirect:/patient/document-upload";
         }
 
@@ -206,9 +255,18 @@ public class PatientFlowController {
 
         MedicalCase medicalCase = caseService.getOrCreateDraftCase(patient);
 
+        Map<String, String> existingAnswers = new HashMap<>();
+        if (medicalCase.getAnswers() != null) {
+            for (CaseAnswer a : medicalCase.getAnswers()) {
+                existingAnswers.put(a.getQuestionCode(), a.getAnswerText());
+            }
+        }
+        int lastStep = adaptiveQuestionService.getTotalQuestionCount(medicalCase.getChiefComplaint(), existingAnswers);
+
         model.addAttribute("patient", patient);
         model.addAttribute("medicalCase", medicalCase);
         model.addAttribute("documents", medicalCase.getDocuments());
+        model.addAttribute("lastStep", lastStep > 0 ? lastStep : 10);
         return "patient/document-upload";
     }
 

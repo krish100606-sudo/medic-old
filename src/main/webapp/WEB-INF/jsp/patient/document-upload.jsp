@@ -160,7 +160,7 @@
 
                 <!-- Navigation Buttons -->
                 <div class="d-flex justify-content-between align-items-center">
-                    <a href="/patient/case-taking?step=10" class="btn mk-btn mk-btn-secondary">
+                    <a href="/patient/case-taking?step=${not empty lastStep ? lastStep : 10}" class="btn mk-btn mk-btn-secondary">
                         <i class="bi bi-arrow-left"></i> Back to Questions
                     </a>
                     <a href="/patient/review" class="btn mk-btn mk-btn-primary mk-btn-lg">

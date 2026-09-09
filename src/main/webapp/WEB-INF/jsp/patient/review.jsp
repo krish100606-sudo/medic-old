@@ -105,58 +105,58 @@
                         <div class="col-md-6">
                             <div class="mk-summary-block h-100">
                                 <div class="mk-summary-label"><i class="bi bi-chat-square-text"></i> Chief Complaint</div>
-                                <div class="mk-summary-value text-primary fw-bold">${not empty medicalCase.chiefComplaint ? medicalCase.chiefComplaint : "Chest Pain"}</div>
+                                <div class="mk-summary-value text-primary fw-bold">${not empty medicalCase.chiefComplaint ? medicalCase.chiefComplaint : "Not specified"}</div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mk-summary-block h-100">
                                 <div class="mk-summary-label"><i class="bi bi-mic"></i> Patient Statement (Verbatim)</div>
-                                <div class="mk-summary-value fst-italic">"${not empty medicalCase.patientStatement ? medicalCase.patientStatement : 'Mujhe do ghante se chest mein pain ho raha hai.'}"</div>
+                                <div class="mk-summary-value fst-italic">"${not empty medicalCase.patientStatement ? medicalCase.patientStatement : 'No statement provided'}"</div>
                             </div>
                         </div>
 
                         <div class="col-md-4">
                             <div class="mk-summary-block h-100">
                                 <div class="mk-summary-label"><i class="bi bi-clock"></i> Onset & Duration</div>
-                                <div class="mk-summary-value">${not empty medicalCase.onset ? medicalCase.onset : "Today (approx. 2 hours ago)"}</div>
+                                <div class="mk-summary-value">${not empty medicalCase.onset ? medicalCase.onset : "Not specified"}</div>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="mk-summary-block h-100">
                                 <div class="mk-summary-label"><i class="bi bi-geo-alt"></i> Location</div>
-                                <div class="mk-summary-value">${not empty medicalCase.location ? medicalCase.location : "Substernal chest region radiating to left shoulder"}</div>
+                                <div class="mk-summary-value">${not empty medicalCase.location ? medicalCase.location : "Not specified"}</div>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="mk-summary-block h-100">
                                 <div class="mk-summary-label"><i class="bi bi-speedometer2"></i> Severity</div>
-                                <div class="mk-summary-value text-danger fw-bold">${not empty medicalCase.severity ? medicalCase.severity : "Severe (8/10)"}</div>
+                                <div class="mk-summary-value text-danger fw-bold">${not empty medicalCase.severity ? medicalCase.severity : "Not specified"}</div>
                             </div>
                         </div>
 
                         <div class="col-md-6">
                             <div class="mk-summary-block h-100">
                                 <div class="mk-summary-label"><i class="bi bi-heart-pulse"></i> Associated Symptoms</div>
-                                <div class="mk-summary-value">${not empty medicalCase.associatedSymptoms ? medicalCase.associatedSymptoms : "Breathing difficulty, mild perspiration"}</div>
+                                <div class="mk-summary-value">${not empty medicalCase.associatedSymptoms ? medicalCase.associatedSymptoms : "None reported"}</div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mk-summary-block h-100">
                                 <div class="mk-summary-label"><i class="bi bi-file-medical"></i> Past Medical History</div>
-                                <div class="mk-summary-value">${not empty medicalCase.pastMedicalHistory ? medicalCase.pastMedicalHistory : "Type 2 Diabetes Mellitus (since 2024)"}</div>
+                                <div class="mk-summary-value">${not empty medicalCase.pastMedicalHistory ? medicalCase.pastMedicalHistory : "None reported"}</div>
                             </div>
                         </div>
 
                         <div class="col-md-6">
                             <div class="mk-summary-block h-100">
                                 <div class="mk-summary-label"><i class="bi bi-capsule"></i> Ongoing Medications</div>
-                                <div class="mk-summary-value text-primary">${not empty medicalCase.currentMedication ? medicalCase.currentMedication : "Tab. Metformin 500 mg BD (after meals)"}</div>
+                                <div class="mk-summary-value text-primary">${not empty medicalCase.currentMedication ? medicalCase.currentMedication : "None reported"}</div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mk-summary-block h-100">
                                 <div class="mk-summary-label"><i class="bi bi-bandaid"></i> Surgical History & Allergies</div>
-                                <div class="mk-summary-value">${not empty medicalCase.surgicalHistory ? medicalCase.surgicalHistory : "Appendectomy (2023)"} | Allergies: ${not empty medicalCase.allergies ? medicalCase.allergies : "NKDA"}</div>
+                                <div class="mk-summary-value">${not empty medicalCase.surgicalHistory ? medicalCase.surgicalHistory : "None reported"} | Allergies: ${not empty medicalCase.allergies ? medicalCase.allergies : "None reported"}</div>
                             </div>
                         </div>
                     </div>
@@ -166,24 +166,27 @@
                 <div class="mk-card mb-4">
                     <div class="mk-card-header">
                         <h6 class="fw-bold text-dark mb-0"><i class="bi bi-calendar3-range text-primary me-2"></i>Chronological Medical Timeline</h6>
+                        <span class="badge bg-light text-muted border">Dynamic History</span>
                     </div>
                     <div class="mk-timeline">
-                        <div class="mk-timeline-item">
-                            <div class="mk-timeline-date">2024</div>
-                            <div class="mk-timeline-text">Type 2 Diabetes Mellitus diagnosed during routine checkup</div>
-                        </div>
-                        <div class="mk-timeline-item">
-                            <div class="mk-timeline-date">2025</div>
-                            <div class="mk-timeline-text">Clinical prescription renewal: Tab. Metformin 500 mg BD regularized</div>
-                        </div>
-                        <div class="mk-timeline-item">
-                            <div class="mk-timeline-date">2026 (Recent Pathology)</div>
-                            <div class="mk-timeline-text">Blood Investigation: HbA1c recorded at 7.8 %, Fasting Blood Glucose: 154 mg/dL</div>
-                        </div>
-                        <div class="mk-timeline-item">
-                            <div class="mk-timeline-date">2026 (Today)</div>
-                            <div class="mk-timeline-text fw-bold text-primary">Pre-Consultation Intake: Presented with ${not empty medicalCase.chiefComplaint ? medicalCase.chiefComplaint : "Chest Pain"} (Onset: Today)</div>
-                        </div>
+                        <c:choose>
+                            <c:when test="${not empty medicalCase.timelineList}">
+                                <c:forEach var="item" items="${medicalCase.timelineList}">
+                                    <div class="mk-timeline-item">
+                                        <div class="mk-timeline-date"><c:out value="${item[0]}"/></div>
+                                        <div class="mk-timeline-text ${item[0] == 'Today' ? 'fw-bold text-primary' : ''}">
+                                            <c:out value="${item[1]}"/>
+                                        </div>
+                                    </div>
+                                </c:forEach>
+                            </c:when>
+                            <c:otherwise>
+                                <div class="mk-timeline-item">
+                                    <div class="mk-timeline-date">Today</div>
+                                    <div class="mk-timeline-text fw-bold text-primary">Pre-Consultation Intake: Presented with ${not empty medicalCase.chiefComplaint ? medicalCase.chiefComplaint : 'Symptoms'}</div>
+                                </div>
+                            </c:otherwise>
+                        </c:choose>
                     </div>
                 </div>
 

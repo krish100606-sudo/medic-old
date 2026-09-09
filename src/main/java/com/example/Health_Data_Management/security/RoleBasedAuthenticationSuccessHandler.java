@@ -21,7 +21,7 @@ public class RoleBasedAuthenticationSuccessHandler implements AuthenticationSucc
 
         for (GrantedAuthority authority : authorities) {
             String role = authority.getAuthority();
-            if (role.equals("ROLE_DOCTOR") || role.equals("ROLE_ADMIN") || role.equals("ROLE_NURSE")) {
+            if (role.equals("ROLE_DOCTOR") || role.equals("ROLE_ADMIN")) {
                 response.sendRedirect("/doctor/dashboard");
                 return;
             } else if (role.equals("ROLE_PATIENT")) {

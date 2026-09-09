@@ -2,6 +2,7 @@ package com.example.Health_Data_Management.service;
 
 import com.example.Health_Data_Management.entity.*;
 import com.example.Health_Data_Management.repository.CaseAnswerRepository;
+import com.example.Health_Data_Management.repository.ConversationMessageRepository;
 import com.example.Health_Data_Management.repository.MedicalCaseRepository;
 import com.example.Health_Data_Management.repository.MedicalDocumentRepository;
 import org.springframework.stereotype.Service;
@@ -17,23 +18,32 @@ public class CaseService {
     private final MedicalCaseRepository caseRepository;
     private final CaseAnswerRepository answerRepository;
     private final MedicalDocumentRepository documentRepository;
+    private final ConversationMessageRepository conversationMessageRepository;
     private final RedFlagService redFlagService;
     private final SummaryService summaryService;
     private final OCRService ocrService;
+    private final DashavidhaService dashavidhaService;
+    private final DrugInteractionService drugInteractionService;
 
     public CaseService(
             MedicalCaseRepository caseRepository,
             CaseAnswerRepository answerRepository,
             MedicalDocumentRepository documentRepository,
+            ConversationMessageRepository conversationMessageRepository,
             RedFlagService redFlagService,
             SummaryService summaryService,
-            OCRService ocrService) {
+            OCRService ocrService,
+            DashavidhaService dashavidhaService,
+            DrugInteractionService drugInteractionService) {
         this.caseRepository = caseRepository;
         this.answerRepository = answerRepository;
         this.documentRepository = documentRepository;
+        this.conversationMessageRepository = conversationMessageRepository;
         this.redFlagService = redFlagService;
         this.summaryService = summaryService;
         this.ocrService = ocrService;
+        this.dashavidhaService = dashavidhaService;
+        this.drugInteractionService = drugInteractionService;
     }
 
     @Transactional
@@ -71,6 +81,13 @@ public class CaseService {
         mapAnswerToCaseField(medicalCase, questionCode, answerText);
         caseRepository.save(medicalCase);
 
+        // Record to conversation history
+        String inputMethodStr = inputType != null ? inputType.name() : "TEXT";
+        String lang = medicalCase.getPatient() != null && medicalCase.getPatient().getPreferredLanguage() != null
+                ? medicalCase.getPatient().getPreferredLanguage() : "English";
+        conversationMessageRepository.save(new ConversationMessage(
+                medicalCase, "PATIENT", answerText, "ANSWER", questionCode, lang, inputMethodStr));
+
         return saved;
     }
 
@@ -83,6 +100,12 @@ public class CaseService {
             case "Q_LOCATION" -> c.setLocation(text);
             case "Q_SEVERITY" -> c.setSeverity(text);
             case "Q_ASSOCIATED_SYMPTOMS" -> c.setAssociatedSymptoms(text);
+            case "Q_ADAPTIVE_EXERTION" -> c.setAssociatedSymptoms((c.getAssociatedSymptoms() != null ? c.getAssociatedSymptoms() + "; " : "") + "Exertion: " + text);
+            case "Q_ADAPTIVE_CARDIAC_RISK" -> c.setPastMedicalHistory((c.getPastMedicalHistory() != null ? c.getPastMedicalHistory() + "; " : "") + "Cardiac Risk: " + text);
+            case "Q_ADAPTIVE_FEVER_PATTERN" -> c.setAssociatedSymptoms((c.getAssociatedSymptoms() != null ? c.getAssociatedSymptoms() + "; " : "") + "Fever Pattern: " + text);
+            case "Q_ADAPTIVE_TRAVEL" -> c.setPersonalHistory((c.getPersonalHistory() != null ? c.getPersonalHistory() + "; " : "") + "Travel History: " + text);
+            case "Q_ADAPTIVE_HEADACHE_TYPE" -> c.setAssociatedSymptoms((c.getAssociatedSymptoms() != null ? c.getAssociatedSymptoms() + "; " : "") + "Headache Type: " + text);
+            case "Q_ADAPTIVE_ABDOMEN_RELATION" -> c.setAssociatedSymptoms((c.getAssociatedSymptoms() != null ? c.getAssociatedSymptoms() + "; " : "") + "Food Relation: " + text);
             case "Q_PAST_DISEASES" -> c.setPastMedicalHistory(text);
             case "Q_SURGERIES" -> c.setSurgicalHistory(text);
             case "Q_MEDICATIONS" -> c.setCurrentMedication(text);
@@ -91,6 +114,18 @@ public class CaseService {
             case "Q_PERSONAL_HISTORY" -> c.setPersonalHistory(text);
             case "Q_INVESTIGATIONS" -> c.setInvestigations(text);
         }
+    }
+
+    @Transactional
+    public ConversationMessage logConversationMessage(Long caseId, String sender, String text, String type, String questionCode, String language, String inputMethod) {
+        MedicalCase medicalCase = caseRepository.findById(caseId).orElse(null);
+        if (medicalCase == null) return null;
+        ConversationMessage msg = new ConversationMessage(medicalCase, sender, text, type, questionCode, language, inputMethod);
+        return conversationMessageRepository.save(msg);
+    }
+
+    public List<ConversationMessage> getConversationHistory(Long caseId) {
+        return conversationMessageRepository.findByMedicalCaseIdOrderByCreatedAtAsc(caseId);
     }
 
     @Transactional
@@ -116,6 +151,23 @@ public class CaseService {
         medicalCase.setRedFlagsDetected(evaluation.isRedFlagsDetected());
         medicalCase.setPriorityReason(evaluation.getReason());
 
+        // Dashavidha Pariksha
+        DashavidhaService.DashavidhaEvaluation ayush = dashavidhaService.evaluate(medicalCase);
+        medicalCase.setPrakritiType(ayush.getPrakriti());
+        medicalCase.setDoshaImbalance(ayush.getVikriti());
+        medicalCase.setDashavidhaAssessment(ayush.getClinicalNotesAyush());
+
+        // Drug-Drug Interactions
+        List<DrugInteraction> interactions = drugInteractionService.checkInteractions(medicalCase.getCurrentMedication());
+        if (!interactions.isEmpty()) {
+            StringBuilder diSb = new StringBuilder();
+            for (DrugInteraction di : interactions) {
+                diSb.append("[").append(di.getSeverity()).append("] ").append(di.getDrugA()).append(" + ").append(di.getDrugB())
+                    .append(": ").append(di.getEffect()).append(" (Rec: ").append(di.getClinicalRecommendation()).append(")\n");
+            }
+            medicalCase.setDrugInteractionsJson(diSb.toString());
+        }
+
         // Generate structured summary & timeline
         String structuredSummary = summaryService.generateStructuredSummary(medicalCase, docs);
         String timeline = summaryService.generateMedicalTimeline(medicalCase, docs);
@@ -133,6 +185,10 @@ public class CaseService {
         if (medicalCase.getTokenNumber() == null) {
             Integer maxToken = caseRepository.findMaxTokenNumber();
             medicalCase.setTokenNumber(maxToken != null ? maxToken + 1 : 104);
+        }
+
+        if (medicalCase.getCaseNumber() == null || medicalCase.getCaseNumber().startsWith("DRAFT-")) {
+            medicalCase.setCaseNumber("MK-" + LocalDateTime.now().getYear() + "-" + (1000 + medicalCase.getTokenNumber()));
         }
 
         medicalCase.setStatus(CaseStatus.SUBMITTED);
@@ -195,6 +251,11 @@ public class CaseService {
 
     public MedicalCase getCaseById(Long id) {
         return caseRepository.findById(id).orElse(null);
+    }
+
+    @Transactional
+    public MedicalCase saveCase(MedicalCase medicalCase) {
+        return caseRepository.save(medicalCase);
     }
 
     public List<MedicalCase> getCasesForPatient(Long patientId) {

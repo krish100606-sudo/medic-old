@@ -7,6 +7,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -22,6 +23,8 @@ public class DataInitializer implements CommandLineRunner {
     private final PasswordEncoder passwordEncoder;
     private final SummaryService summaryService;
 
+    private final javax.sql.DataSource dataSource;
+
     public DataInitializer(
             UserRepository userRepository,
             PatientRepository patientRepository,
@@ -30,7 +33,8 @@ public class DataInitializer implements CommandLineRunner {
             MedicalDocumentRepository documentRepository,
             CaseAnswerRepository answerRepository,
             PasswordEncoder passwordEncoder,
-            SummaryService summaryService) {
+            SummaryService summaryService,
+            javax.sql.DataSource dataSource) {
         this.userRepository = userRepository;
         this.patientRepository = patientRepository;
         this.doctorRepository = doctorRepository;
@@ -39,10 +43,27 @@ public class DataInitializer implements CommandLineRunner {
         this.answerRepository = answerRepository;
         this.passwordEncoder = passwordEncoder;
         this.summaryService = summaryService;
+        this.dataSource = dataSource;
     }
 
     @Override
     public void run(String... args) {
+        // Upgrade columns to TEXT in database if necessary
+        try (java.sql.Connection conn = dataSource.getConnection();
+             java.sql.Statement stmt = conn.createStatement()) {
+            String[] cols = {
+                "digital_signature", "drug_interactions_json", "dashavidha_assessment",
+                "doctor_clinical_notes", "structured_summary", "medical_timeline",
+                "priority_reason", "red_flags_details", "patient_statement",
+                "associated_symptoms", "past_medical_history", "current_medication", "investigations"
+            };
+            for (String col : cols) {
+                try {
+                    stmt.execute("ALTER TABLE medical_cases ALTER COLUMN " + col + " TYPE TEXT");
+                } catch (SQLException ignored) {}
+            }
+        } catch (SQLException ignored) {}
+
         // Check if demo doctor already exists
         if (userRepository.findByEmail("doctor@medikiosk.com").isPresent()) {
             return;

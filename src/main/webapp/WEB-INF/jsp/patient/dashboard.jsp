@@ -213,7 +213,7 @@
                             <c:when test="${not empty cases}">
                                 <c:forEach var="c" items="${cases}">
                                     <tr>
-                                        <td class="small">${c.createdAt.toLocalDate()}</td>
+                                        <td class="small">${c.formattedCreatedAt}</td>
                                         <td class="fw-semibold text-dark">${c.caseNumber}</td>
                                         <td class="small">${not empty c.chiefComplaint ? c.chiefComplaint : "General Consultation"}</td>
                                         <td>

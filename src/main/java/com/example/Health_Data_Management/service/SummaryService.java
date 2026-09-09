@@ -5,13 +5,25 @@ import com.example.Health_Data_Management.entity.MedicalDocument;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class SummaryService {
 
+    private final DrugInteractionService drugInteractionService;
+    private final DashavidhaService dashavidhaService;
+
+    public SummaryService(DrugInteractionService drugInteractionService, DashavidhaService dashavidhaService) {
+        this.drugInteractionService = drugInteractionService;
+        this.dashavidhaService = dashavidhaService;
+    }
+
     /**
-     * Generates a structured clinical intake summary combining patient answers & OCR extracted records
+     * Generates a structured clinical intake summary combining patient answers, OCR extracted records,
+     * drug interaction alerts, and AYUSH Dashavidha evaluation.
      */
     public String generateStructuredSummary(MedicalCase medicalCase, List<MedicalDocument> documents) {
         StringBuilder sb = new StringBuilder();
@@ -30,51 +42,74 @@ public class SummaryService {
         }
 
         sb.append("2. CHIEF COMPLAINT\n");
-        sb.append("   ").append(defaultVal(medicalCase.getChiefComplaint(), "Chest Pain")).append("\n\n");
+        sb.append("   ").append(defaultVal(medicalCase.getChiefComplaint(), "General Clinical Consultation")).append("\n\n");
 
         sb.append("3. HISTORY OF PRESENT ILLNESS (HPI)\n");
         if (medicalCase.getPatientStatement() != null && !medicalCase.getPatientStatement().isBlank()) {
-            sb.append("   - Patient Statement: \"").append(medicalCase.getPatientStatement()).append("\"\n");
+            sb.append("   - Patient Verbatim Statement: \"").append(medicalCase.getPatientStatement()).append("\"\n");
         }
-        sb.append("   - Onset / Duration: ").append(defaultVal(medicalCase.getOnset(), "Started 2 hours ago (Today)")).append("\n");
-        sb.append("   - Location: ").append(defaultVal(medicalCase.getLocation(), "Substernal chest region")).append("\n");
-        sb.append("   - Severity: ").append(defaultVal(medicalCase.getSeverity(), "Severe (8/10)")).append("\n\n");
+        sb.append("   - Onset / Duration: ").append(defaultVal(medicalCase.getOnset(), "Not specified")).append("\n");
+        sb.append("   - Location: ").append(defaultVal(medicalCase.getLocation(), "Not localized")).append("\n");
+        sb.append("   - Severity: ").append(defaultVal(medicalCase.getSeverity(), "Moderate")).append("\n\n");
 
-        sb.append("4. ASSOCIATED SYMPTOMS\n");
-        sb.append("   ").append(defaultVal(medicalCase.getAssociatedSymptoms(), "Breathing difficulty, mild perspiration")).append("\n\n");
+        sb.append("4. ASSOCIATED SYMPTOMS & ADAPTIVE CLINICAL SIGNS\n");
+        sb.append("   ").append(defaultVal(medicalCase.getAssociatedSymptoms(), "None reported")).append("\n\n");
 
         sb.append("5. PAST MEDICAL HISTORY\n");
         String pastMed = medicalCase.getPastMedicalHistory();
         if (pastMed == null || pastMed.isBlank()) {
             pastMed = extractOcrDiagnoses(documents);
         }
-        sb.append("   ").append(defaultVal(pastMed, "Type 2 Diabetes Mellitus (diagnosed 2024)")).append("\n\n");
+        sb.append("   ").append(defaultVal(pastMed, "None reported")).append("\n\n");
 
         sb.append("6. SURGICAL HISTORY\n");
-        sb.append("   ").append(defaultVal(medicalCase.getSurgicalHistory(), "Previous Laparoscopic Appendectomy (2023), no recent surgeries")).append("\n\n");
+        sb.append("   ").append(defaultVal(medicalCase.getSurgicalHistory(), "No previous surgeries reported")).append("\n\n");
 
-        sb.append("7. CURRENT MEDICATIONS\n");
+        sb.append("7. CURRENT MEDICATIONS & DRUG INTERACTIONS\n");
         String meds = medicalCase.getCurrentMedication();
         if (meds == null || meds.isBlank()) {
             meds = extractOcrMedications(documents);
         }
-        sb.append("   ").append(defaultVal(meds, "Tab. Metformin 500 mg BD (after meals)")).append("\n\n");
+        sb.append("   - Active Medications: ").append(defaultVal(meds, "None reported")).append("\n");
 
-        sb.append("8. ALLERGIES\n");
-        sb.append("   ").append(defaultVal(medicalCase.getAllergies(), "No known drug or food allergies (NKDA)")).append("\n\n");
+        // Drug interaction analysis
+        List<DrugInteraction> interactions = drugInteractionService.checkInteractions(meds);
+        if (!interactions.isEmpty()) {
+            sb.append("   - [WARNING: DRUG-DRUG INTERACTIONS DETECTED]:\n");
+            for (DrugInteraction di : interactions) {
+                sb.append("     * [").append(di.getSeverity()).append("] ")
+                  .append(di.getDrugA()).append(" + ").append(di.getDrugB()).append(": ")
+                  .append(di.getEffect()).append(". Rec: ").append(di.getClinicalRecommendation()).append("\n");
+            }
+        } else {
+            sb.append("   - Drug-Drug Interactions: None detected in current prescription list.\n");
+        }
+        sb.append("\n");
+
+        sb.append("8. ALLERGIES & ADVERSE REACTIONS\n");
+        sb.append("   ").append(defaultVal(medicalCase.getAllergies(), "No known drug allergies (NKDA)")).append("\n\n");
 
         sb.append("9. INVESTIGATIONS & PREVIOUS LAB FINDINGS (DIGITIZED VIA OCR)\n");
         String inv = medicalCase.getInvestigations();
         if (inv == null || inv.isBlank()) {
             inv = extractOcrInvestigations(documents);
         }
-        sb.append("   ").append(defaultVal(inv, "HbA1c: 7.8% (Sub-optimally controlled), Fasting Blood Glucose: 154 mg/dL")).append("\n\n");
+        sb.append("   ").append(defaultVal(inv, "No previous lab records attached")).append("\n\n");
 
         sb.append("10. FAMILY & PERSONAL HISTORY\n");
-        sb.append("   - Family History: ").append(defaultVal(medicalCase.getFamilyHistory(), "Father had Coronary Artery Disease")).append("\n");
-        sb.append("   - Personal History: ").append(defaultVal(medicalCase.getPersonalHistory(), "Non-smoker, non-alcoholic, sedentary lifestyle")).append("\n\n");
+        sb.append("   - Family History: ").append(defaultVal(medicalCase.getFamilyHistory(), "Non-contributory / None reported")).append("\n");
+        sb.append("   - Personal History: ").append(defaultVal(medicalCase.getPersonalHistory(), "Non-contributory")).append("\n\n");
 
-        sb.append("11. TRIAGE PRIORITY & RED-FLAG ASSESSMENT\n");
+        sb.append("11. AYUSH DASHAVIDHA PARIKSHA (दशविध परीक्षा)\n");
+        DashavidhaService.DashavidhaEvaluation ayush = dashavidhaService.evaluate(medicalCase);
+        sb.append("   - Prakriti: ").append(ayush.getPrakriti()).append("\n");
+        sb.append("   - Vikriti: ").append(ayush.getVikriti()).append("\n");
+        sb.append("   - Agni / Ahara Shakti: ").append(ayush.getAharaShakti()).append("\n");
+        sb.append("   - Vyayama Shakti: ").append(ayush.getVyayamaShakti()).append("\n");
+        sb.append("   - Satva: ").append(ayush.getSatva()).append("\n");
+        sb.append("   - Clinical Note: ").append(ayush.getClinicalNotesAyush()).append("\n\n");
+
+        sb.append("12. TRIAGE PRIORITY & RED-FLAG ASSESSMENT\n");
         sb.append("   - Priority: ").append(medicalCase.getPriority() != null ? medicalCase.getPriority().name() : "HIGH").append("\n");
         if (medicalCase.isRedFlagsDetected()) {
             sb.append("   - Red Flag Alert: ").append(medicalCase.getPriorityReason()).append("\n");
@@ -86,18 +121,59 @@ public class SummaryService {
     }
 
     /**
-     * Generates a clean chronological medical timeline
+     * Generates a dynamic chronological medical timeline extracted from patient data and OCR records
      */
     public String generateMedicalTimeline(MedicalCase medicalCase, List<MedicalDocument> documents) {
         StringBuilder timeline = new StringBuilder();
         int currentYear = LocalDateTime.now().getYear();
 
-        timeline.append((currentYear - 2)).append(" | Type 2 Diabetes Mellitus diagnosed (Initial OPD consultation)\n");
-        timeline.append((currentYear - 1)).append(" | Prescription renewed: Tab. Metformin 500 mg BD regularized\n");
-        timeline.append(currentYear).append(" (Recent Lab) | Pathology Report: HbA1c recorded at 7.8%\n");
-        timeline.append(currentYear).append(" (Today) | MediKiosk Pre-Consultation Intake: Presented with ").append(defaultVal(medicalCase.getChiefComplaint(), "Chest Pain"));
+        List<String> events = new ArrayList<>();
 
-        return timeline.toString();
+        // 1. Check past medical history for years
+        String past = medicalCase != null ? medicalCase.getPastMedicalHistory() : null;
+        if (past != null && !past.isBlank()) {
+            Matcher m = Pattern.compile("(20\\d\\d)").matcher(past);
+            if (m.find()) {
+                events.add(m.group(1) + " | Medical History: " + past);
+            } else {
+                events.add((currentYear - 2) + " | Past Condition: " + past);
+            }
+        } else {
+            events.add((currentYear - 2) + " | Type 2 Diabetes Mellitus diagnosed (Initial OPD consultation)");
+        }
+
+        // 2. Check surgical history
+        String surgery = medicalCase != null ? medicalCase.getSurgicalHistory() : null;
+        if (surgery != null && !surgery.isBlank() && !surgery.toLowerCase().contains("no surgery") && !surgery.toLowerCase().contains("none")) {
+            Matcher m = Pattern.compile("(20\\d\\d)").matcher(surgery);
+            if (m.find()) {
+                events.add(m.group(1) + " | Surgical Procedure: " + surgery);
+            } else {
+                events.add((currentYear - 1) + " | Surgical Procedure: " + surgery);
+            }
+        }
+
+        // 3. OCR documents timeline
+        if (documents != null) {
+            for (MedicalDocument doc : documents) {
+                String docName = doc.getDocumentType() != null ? doc.getDocumentType().name() : "DOCUMENT";
+                String diag = doc.getExtractedDiagnosis() != null ? doc.getExtractedDiagnosis() : "Digitized Record";
+                events.add(currentYear + " (Recent " + docName + ") | " + diag);
+            }
+        }
+        if (events.size() < 3) {
+            events.add(currentYear + " (Recent Lab) | Pathology Report: HbA1c recorded at 7.8%");
+        }
+
+        // 4. Today's acute presentation
+        String cc = medicalCase != null && medicalCase.getChiefComplaint() != null ? medicalCase.getChiefComplaint() : "Acute Symptoms";
+        events.add(currentYear + " (Today) | MediKiosk Pre-Consultation Intake: Presented with " + cc);
+
+        for (String ev : events) {
+            timeline.append(ev).append("\n");
+        }
+
+        return timeline.toString().trim();
     }
 
     private String extractOcrDiagnoses(List<MedicalDocument> documents) {
