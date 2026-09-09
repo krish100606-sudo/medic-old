@@ -14,11 +14,13 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Gemini AI Service
- * Powered by Google Gemini 3.5 Flash for dynamic adaptive clinical questioning,
- * empathetic real-time conversation, and differential triage synthesis.
+ * Powered by Google Gemini (gemini-3.5-flash-lite / gemini-3.5-flash) for dynamic adaptive
+ * clinical questioning, empathetic real-time conversation, and differential triage synthesis.
+ * Built with circuit-breaker rate-limit backoff, request caching, and seamless local fallbacks.
  */
 @Service
 public class GeminiAiService {
@@ -28,18 +30,21 @@ public class GeminiAiService {
     @Value("${gemini.api.key:}")
     private String apiKey;
 
-    @Value("${gemini.model:gemini-3.5-flash}")
+    @Value("${gemini.model:gemini-3.5-flash-lite}")
     private String modelName;
 
     @Value("${gemini.api.url:https://generativelanguage.googleapis.com/v1beta/models}")
     private String apiUrl;
 
     private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(4))
+            .connectTimeout(Duration.ofSeconds(10))
             .build();
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final Map<String, List<AdaptiveQuestion>> questionsCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, List<AdaptiveQuestion>> questionsCache = new ConcurrentHashMap<>();
+
+    // Circuit-breaker backoff timestamp in millis when 429 quota is hit
+    private volatile long rateLimitCooldownUntil = 0;
 
     public boolean isConfigured() {
         return apiKey != null && !apiKey.trim().isEmpty();
@@ -70,11 +75,11 @@ public class GeminiAiService {
             String prompt = "You are an intelligent clinical triage intake assistant for a hospital OPD kiosk. " +
                     "Based on the following patient presentation: [" + context + "], " +
                     "generate exactly 2 high-yield clinical branching questions to narrow down the differential diagnosis. " +
-                    "Return ONLY valid JSON (no markdown fences, or wrapped in ```json) as an array of 2 objects with this exact structure: " +
-                    "[{\"questionCode\": \"Q_ADAPTIVE_AI_1\", \"questionTextEn\": \"Question in English?\", \"questionTextHi\": \"Question in Hindi (Devanagari script)?\", \"touchOptions\": [\"Option 1 in English / हिंदी\", \"Option 2 in English / हिंदी\", \"Option 3 in English / हिंदी\", \"None / कोई नहीं\"]}, " +
+                    "Return ONLY valid JSON as an array of 2 objects with this exact structure: " +
+                    "[{\"questionCode\": \"Q_ADAPTIVE_AI_1\", \"questionTextEn\": \"Question in English?\", \"questionTextHi\": \"Question in Hindi (Devanagari script)?\", \"touchOptions\": [\"Option 1 in English / हिंदी\", \"Option 2 in English / हिंदी\", \"None / कोई नहीं\"]}, " +
                     "{\"questionCode\": \"Q_ADAPTIVE_AI_2\", \"questionTextEn\": \"...\", \"questionTextHi\": \"...\", \"touchOptions\": [...]}]";
 
-            String responseText = callGemini(prompt, 10);
+            String responseText = callGemini(prompt, 8, 300);
             if (responseText == null || responseText.isBlank()) {
                 return Collections.emptyList();
             }
@@ -113,7 +118,7 @@ public class GeminiAiService {
             }
 
         } catch (Exception e) {
-            log.warn("Gemini adaptive question generation failed, falling back to local engine: {}", e.getMessage());
+            log.info("Gemini adaptive question generation: switching to local engine ({})", e.getMessage());
         }
 
         return Collections.emptyList();
@@ -121,25 +126,21 @@ public class GeminiAiService {
 
     /**
      * Generates a conversational, empathetic response for the interactive patient chat transcript.
+     * Uses a fast 3-second timeout so the patient's step transition is instant and responsive.
      */
     public String generateConversationalResponse(String patientName, String questionText, String answerText, String chiefComplaint) {
-        if (!isConfigured()) {
-            return generateFallbackConversationalResponse(chiefComplaint, answerText);
-        }
+        if (isConfigured() && System.currentTimeMillis() >= rateLimitCooldownUntil) {
+            try {
+                String prompt = "You are MediKiosk AI, an empathetic digital clinical intake nurse at a hospital OPD. " +
+                        "Patient " + (patientName != null ? patientName : "Patient") + " (Chief complaint: " + chiefComplaint + ") answered: " +
+                        "\"" + questionText + "\" with: \"" + answerText + "\". " +
+                        "Provide a warm, reassuring response in exactly 1-2 sentences acknowledging what they shared. Do not diagnose or prescribe.";
 
-        try {
-            String prompt = "You are MediKiosk AI, an empathetic and professional digital clinical intake nurse at a hospital OPD kiosk. " +
-                    "The patient " + (patientName != null ? patientName : "Patient") + " (Chief complaint: " + chiefComplaint + ") just answered the question: " +
-                    "\"" + questionText + "\" with the answer: \"" + answerText + "\". " +
-                    "Provide a warm, reassuring, and clinically astute response in 1-2 sentences acknowledging what they shared and guiding them smoothly to the next question. " +
-                    "Do NOT provide a definitive diagnosis or prescribe medication. Keep it polite, clear, and reassuring. Respond in English with an optional reassuring Hindi phrase if appropriate.";
-
-            String res = callGemini(prompt, 6);
-            if (res != null && !res.isBlank()) {
-                return res.trim().replace("\"", "");
-            }
-        } catch (Exception e) {
-            log.warn("Gemini conversation response failed: {}", e.getMessage());
+                String res = callGemini(prompt, 3, 70);
+                if (res != null && !res.isBlank()) {
+                    return res.trim().replace("\"", "");
+                }
+            } catch (Exception ignored) {}
         }
 
         return generateFallbackConversationalResponse(chiefComplaint, answerText);
@@ -149,7 +150,7 @@ public class GeminiAiService {
      * Generates an AI clinical summary and differential assessment for doctor portal.
      */
     public String generateClinicalInsights(String chiefComplaint, Map<String, String> answers, String topMlDisease, double mlProb) {
-        if (!isConfigured()) {
+        if (!isConfigured() || System.currentTimeMillis() < rateLimitCooldownUntil) {
             return "ML Predictive Suspected Condition: " + topMlDisease + " (" + (int)(mlProb * 100) + "% confidence). Further physician verification advised.";
         }
 
@@ -163,24 +164,37 @@ public class GeminiAiService {
                     "2. Top 2 differential diagnoses to investigate, " +
                     "3. Recommended bedside checks / tests.";
 
-            String res = callGemini(prompt, 8);
+            String res = callGemini(prompt, 8, 250);
             if (res != null && !res.isBlank()) {
                 return res.trim();
             }
         } catch (Exception e) {
-            log.warn("Gemini clinical insights generation failed: {}", e.getMessage());
+            log.info("Gemini clinical insights: falling back to ML model summary ({})", e.getMessage());
         }
 
         return "ML Predictive Suspected Condition: " + topMlDisease + " (" + (int)(mlProb * 100) + "% confidence).";
     }
 
-    private String callGemini(String prompt, int timeoutSeconds) {
+    private String callGemini(String prompt, int timeoutSeconds, int maxTokens) {
+        // Skip call if circuit breaker is cooling down after a 429 quota event
+        if (System.currentTimeMillis() < rateLimitCooldownUntil) {
+            return null;
+        }
+
         try {
-            String endpoint = apiUrl + "/" + modelName + ":generateContent?key=" + apiKey;
+            String activeModel = (modelName != null && !modelName.isBlank()) ? modelName : "gemini-3.5-flash-lite";
+            String endpoint = apiUrl + "/" + activeModel + ":generateContent?key=" + apiKey;
 
             Map<String, Object> part = Map.of("text", prompt);
             Map<String, Object> content = Map.of("parts", List.of(part));
-            Map<String, Object> requestBody = Map.of("contents", List.of(content));
+
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("contents", List.of(content));
+
+            Map<String, Object> genConfig = new HashMap<>();
+            genConfig.put("maxOutputTokens", maxTokens > 0 ? maxTokens : 200);
+            genConfig.put("temperature", 0.3);
+            requestBody.put("generationConfig", genConfig);
 
             String jsonPayload = objectMapper.writeValueAsString(requestBody);
 
@@ -202,11 +216,17 @@ public class GeminiAiService {
                         return parts.get(0).path("text").asText();
                     }
                 }
+            } else if (response.statusCode() == 429) {
+                // Rate limited: cool down for 60 seconds to avoid spamming the endpoint
+                rateLimitCooldownUntil = System.currentTimeMillis() + 60_000;
+                log.info("Gemini API rate limit active. Automatically engaging local ML & rule fallbacks for 60 seconds.");
             } else {
-                log.warn("Gemini API returned status {}: {}", response.statusCode(), response.body());
+                log.info("Gemini API status {}: fallback engaged.", response.statusCode());
             }
+        } catch (java.net.http.HttpTimeoutException e) {
+            log.info("Gemini API latency exceeded {}s: local fallback engaged seamlessly.", timeoutSeconds);
         } catch (Exception e) {
-            log.warn("Error calling Gemini API: {}", e.getMessage());
+            log.info("Gemini API call: using local fallback ({})", e.getMessage());
         }
         return null;
     }
@@ -235,6 +255,12 @@ public class GeminiAiService {
         String cc = chiefComplaint != null ? chiefComplaint.toLowerCase() : "";
         if (answer.contains("chest") || answer.contains("saans") || answer.contains("breath") || answer.contains("severe") || cc.contains("chest")) {
             return "I understand. Thank you for clarifying. I have noted this symptom regarding your " + (chiefComplaint != null ? chiefComplaint.toLowerCase() : "condition") + " for your doctor to review right away.";
+        }
+        if (answer.contains("fever") || answer.contains("bukhar") || answer.contains("cough") || answer.contains("khansi")) {
+            return "Thank you for describing your symptoms. This information has been recorded for your clinical assessment.";
+        }
+        if (answer.contains("today") || answer.contains("days") || answer.contains("week") || answer.contains("month")) {
+            return "Got it. Recording the timeline of your symptoms helps your doctor tailor the best care.";
         }
         return "Thank you. Your response has been securely recorded into your clinical intake file.";
     }
