@@ -12,4 +12,6 @@ public interface ConversationMessageRepository extends JpaRepository<Conversatio
     List<ConversationMessage> findByMedicalCaseIdAndQuestionCodeOrderByCreatedAtAsc(Long medicalCaseId, String questionCode);
 
     long countByMedicalCaseId(Long medicalCaseId);
+
+    void deleteByMedicalCaseId(Long medicalCaseId);
 }

@@ -162,7 +162,10 @@
                                 <c:choose>
                                     <c:when test="${currentCase.status == 'DRAFT'}">
                                         <a href="/patient/case-taking?step=1" class="btn mk-btn mk-btn-primary">
-                                            <i class="bi bi-play-circle"></i> Resume Guided Case Taking
+                                            <i class="bi bi-play-circle"></i> Resume Case Taking
+                                        </a>
+                                        <a href="/patient/case-taking/new" class="btn mk-btn btn-outline-danger" onclick="return confirm('Start a fresh intake case and clear previous conversation?')">
+                                            <i class="bi bi-plus-circle"></i> Start Fresh Case
                                         </a>
                                         <a href="/patient/document-upload" class="btn mk-btn mk-btn-secondary">
                                             <i class="bi bi-upload"></i> Upload Documents

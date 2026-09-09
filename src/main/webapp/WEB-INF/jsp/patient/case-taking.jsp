@@ -26,6 +26,9 @@
             </a>
             <div class="d-flex align-items-center gap-3">
                 <span class="badge bg-light text-dark border"><i class="bi bi-translate me-1"></i> ${lang}</span>
+                <a href="/patient/case-taking/new" class="btn btn-sm btn-outline-primary" title="Start a fresh intake case and clear previous chat" onclick="return confirm('Start a new case intake and clear current chat?')">
+                    <i class="bi bi-plus-circle"></i> New Chat
+                </a>
                 <button type="button" class="btn btn-sm btn-outline-primary d-lg-none" data-bs-toggle="collapse" data-bs-target="#conversationSidebarMobile">
                     <i class="bi bi-chat-left-dots"></i> Transcript (${not empty conversationMessages ? conversationMessages.size() : 0})
                 </button>
@@ -580,12 +583,17 @@
             <!-- Conversation History Sidebar (Desktop & Tablet) -->
             <div class="col-lg-4 col-xl-4 d-none d-lg-block">
                 <div class="mk-card h-100 d-flex flex-column" style="max-height: 720px;">
-                    <div class="mk-card-header pb-2 mb-2">
+                    <div class="mk-card-header pb-2 mb-2 d-flex justify-content-between align-items-center">
                         <div>
                             <span class="fw-bold text-dark"><i class="bi bi-chat-left-text text-primary me-1"></i> Conversation Transcript</span>
                             <div class="small text-muted">AI-Recorded Patient Intake Log</div>
                         </div>
-                        <span class="badge bg-primary rounded-pill">${not empty conversationMessages ? conversationMessages.size() : 0} msgs</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-primary rounded-pill">${not empty conversationMessages ? conversationMessages.size() : 0} msgs</span>
+                            <a href="/patient/case-taking/new" class="btn btn-sm btn-outline-danger py-0 px-2 small" title="Clear previous chat and start a new intake case" onclick="return confirm('Start a fresh intake case and clear current transcript?')">
+                                <i class="bi bi-arrow-counterclockwise"></i> New Chat
+                            </a>
+                        </div>
                     </div>
 
                     <div class="mk-chat-container flex-grow-1" id="chatContainer">
@@ -636,8 +644,12 @@
 
     <!-- Mobile Conversation Drawer Collapse -->
     <div class="collapse d-lg-none px-4 mb-4" id="conversationSidebarMobile">
-        <div class="mk-card">
-            <h6 class="fw-bold mb-3"><i class="bi bi-chat-left-text text-primary me-1"></i> Intake Transcript</h6>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0"><i class="bi bi-chat-left-text text-primary me-1"></i> Intake Transcript</h6>
+                <a href="/patient/case-taking/new" class="btn btn-sm btn-outline-danger py-0 px-2 small" onclick="return confirm('Start a fresh intake case and clear current transcript?')">
+                    <i class="bi bi-arrow-counterclockwise"></i> New Chat
+                </a>
+            </div>
             <div class="mk-chat-container" id="chatContainerMobile" style="max-height: 300px;">
                 <c:forEach var="msg" items="${conversationMessages}">
                     <div class="p-2 rounded mb-2 ${msg.sender == 'PATIENT' ? 'bg-primary text-white text-end' : 'bg-light'}">

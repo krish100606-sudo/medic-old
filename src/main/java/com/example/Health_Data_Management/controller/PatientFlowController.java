@@ -119,7 +119,8 @@ public class PatientFlowController {
         }
         patientRepository.save(patient);
 
-        MedicalCase draftCase = caseService.getOrCreateDraftCase(patient);
+        // Start a brand new draft case, removing any old chat messages and previous intake draft
+        MedicalCase draftCase = caseService.startNewDraftCase(patient);
         if (digitalSignature != null && !digitalSignature.trim().isEmpty()) {
             draftCase.setDigitalSignature(digitalSignature.trim());
             caseService.saveCase(draftCase);
@@ -159,13 +160,28 @@ public class PatientFlowController {
     // ---------------------------------------------------------
     // CLINICAL CASE-TAKING (STEP-BY-STEP GUIDED INTERFACE)
     // ---------------------------------------------------------
+    @GetMapping("/case-taking/new")
+    public String newCaseTaking(Authentication authentication) {
+        Patient patient = getCurrentPatient(authentication);
+        if (patient == null) return "redirect:/login";
+
+        caseService.startNewDraftCase(patient);
+        return "redirect:/patient/case-taking?step=1";
+    }
+
     @GetMapping("/case-taking")
     public String caseTaking(
             Authentication authentication,
             @RequestParam(value = "step", defaultValue = "1") int step,
+            @RequestParam(value = "reset", defaultValue = "false") boolean reset,
             Model model) {
         Patient patient = getCurrentPatient(authentication);
         if (patient == null) return "redirect:/login";
+
+        if (reset) {
+            caseService.startNewDraftCase(patient);
+            return "redirect:/patient/case-taking?step=1";
+        }
 
         MedicalCase medicalCase = caseService.getOrCreateDraftCase(patient);
 

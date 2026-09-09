@@ -54,6 +54,32 @@ public class CaseService {
             return existingDraft.get();
         }
 
+        return createFreshDraftCase(patient);
+    }
+
+    @Transactional
+    public MedicalCase startNewDraftCase(Patient patient) {
+        // Clean up any existing unsubmitted drafts and their old messages
+        List<MedicalCase> cases = caseRepository.findByPatientIdOrderByCreatedAtDesc(patient.getId());
+        if (cases != null) {
+            for (MedicalCase c : cases) {
+                if (c.getStatus() == CaseStatus.DRAFT) {
+                    conversationMessageRepository.deleteByMedicalCaseId(c.getId());
+                    answerRepository.deleteByMedicalCaseId(c.getId());
+                    caseRepository.delete(c);
+                }
+            }
+        }
+
+        return createFreshDraftCase(patient);
+    }
+
+    @Transactional
+    public void clearConversationHistory(Long caseId) {
+        conversationMessageRepository.deleteByMedicalCaseId(caseId);
+    }
+
+    private MedicalCase createFreshDraftCase(Patient patient) {
         MedicalCase newCase = new MedicalCase(patient);
         String uniqueNum = String.format("MK-%d-%04d", System.currentTimeMillis() % 1000000, (int)(Math.random() * 9000 + 1000));
         newCase.setCaseNumber(uniqueNum);
