@@ -638,7 +638,7 @@
     <div class="collapse d-lg-none px-4 mb-4" id="conversationSidebarMobile">
         <div class="mk-card">
             <h6 class="fw-bold mb-3"><i class="bi bi-chat-left-text text-primary me-1"></i> Intake Transcript</h6>
-            <div class="mk-chat-container" style="max-height: 300px;">
+            <div class="mk-chat-container" id="chatContainerMobile" style="max-height: 300px;">
                 <c:forEach var="msg" items="${conversationMessages}">
                     <div class="p-2 rounded mb-2 ${msg.sender == 'PATIENT' ? 'bg-primary text-white text-end' : 'bg-light'}">
                         <div class="small fw-bold">${msg.sender} (${msg.inputMethod})</div>
@@ -654,6 +654,37 @@
     <script>
         let voiceModule = null;
 
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function appendOptimisticChat(text, method) {
+            const containers = [document.getElementById('chatContainer'), document.getElementById('chatContainerMobile')];
+            const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const icon = method === 'VOICE' ? 'bi-mic' : (method === 'TOUCH' ? 'bi-hand-index-thumb' : 'bi-keyboard');
+
+            containers.forEach(container => {
+                if (!container) return;
+                const emptyPlaceholder = container.querySelector('.text-center.py-5');
+                if (emptyPlaceholder) emptyPlaceholder.remove();
+
+                const patientBubble = document.createElement('div');
+                patientBubble.className = 'mk-chat-bubble mk-chat-bubble-patient mk-chat-bubble-animate shadow-sm';
+                patientBubble.innerHTML = '<div>' + escapeHtml(text) + '</div>' +
+                    '<div class="mk-chat-bubble-meta"><span><i class="bi ' + icon + '"></i> ' + method + '</span><span>•</span><span>' + timeStr + '</span></div>';
+                container.appendChild(patientBubble);
+
+                const aiTyping = document.createElement('div');
+                aiTyping.id = 'optimisticAiTyping';
+                aiTyping.className = 'mk-chat-bubble mk-chat-bubble-system mk-chat-bubble-animate opacity-75 mt-2';
+                aiTyping.innerHTML = '<div class="small fw-semibold text-primary mb-1">MediKiosk AI</div>' +
+                    '<div class="d-flex align-items-center gap-2"><span class="spinner-grow spinner-grow-sm text-primary"></span><span>Recording clinical intake...</span></div>';
+                container.appendChild(aiTyping);
+                container.scrollTop = container.scrollHeight;
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const langCode = '${lang}' === 'Hindi' ? 'hi-IN' : 'en-IN';
             voiceModule = new MediKioskVoice({
@@ -668,6 +699,19 @@
             const chatEl = document.getElementById('chatContainer');
             if (chatEl) {
                 chatEl.scrollTop = chatEl.scrollHeight;
+            }
+
+            // Zero-latency optimistic UI update on form submit
+            const form = document.getElementById('intakeForm');
+            if (form) {
+                form.addEventListener('submit', () => {
+                    const input = document.getElementById('answerInput');
+                    const val = input ? input.value : '';
+                    const method = document.getElementById('inputType')?.value || 'TEXT';
+                    if (val && val.trim()) {
+                        appendOptimisticChat(val.trim(), method);
+                    }
+                });
             }
         });
 

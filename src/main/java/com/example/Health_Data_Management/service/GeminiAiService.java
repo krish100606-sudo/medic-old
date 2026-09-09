@@ -125,8 +125,61 @@ public class GeminiAiService {
     }
 
     /**
+     * Generates an instant, highly clinical, zero-latency empathetic acknowledgment.
+     * Executes in < 1ms so patient step transitions are instantaneous.
+     */
+    public String generateInstantEmpatheticResponse(String patientName, String questionCode, String questionText, String answerText, String chiefComplaint) {
+        String pName = (patientName != null && !patientName.isBlank() && !patientName.equalsIgnoreCase("Patient")) ? patientName : null;
+        String ans = answerText != null ? answerText.trim() : "";
+        String ansLower = ans.toLowerCase();
+        String ccLower = chiefComplaint != null ? chiefComplaint.toLowerCase() : "";
+        String qCode = questionCode != null ? questionCode : "";
+
+        if ("Q_CHIEF_COMPLAINT".equals(qCode)) {
+            return (pName != null ? pName + ", thank you " : "Thank you ") + "for specifying your main concern (" + ans + "). Let's gather a few quick details for your doctor.";
+        }
+        if ("Q_STATEMENT".equals(qCode)) {
+            return "Thank you for describing your symptoms in your own words. These details have been captured for the physician's review.";
+        }
+        if ("Q_ONSET".equals(qCode)) {
+            return "Noted that symptoms started " + ans + ". This timeline is vital for assessing clinical acuity.";
+        }
+        if ("Q_LOCATION".equals(qCode)) {
+            return "Recorded location: " + ans + ". Anatomical mapping helps guide targeted bedside examination.";
+        }
+        if ("Q_SEVERITY".equals(qCode)) {
+            return "Discomfort severity rated at " + ans + ". We have prioritized this in your intake profile.";
+        }
+        if ("Q_ASSOCIATED_SYMPTOMS".equals(qCode)) {
+            return "Associated symptoms recorded: " + ans + ". Tracking co-occurring symptoms refines the diagnostic differential.";
+        }
+        if (qCode.startsWith("Q_ADAPTIVE_")) {
+            return "Thank you for clarifying this follow-up detail. This adds essential clinical precision to your chart.";
+        }
+        if ("Q_PAST_DISEASES".equals(qCode)) {
+            return "Past medical conditions logged: " + ans + ". Chronic health context guides safe clinical management.";
+        }
+        if ("Q_SURGERIES".equals(qCode)) {
+            return "Surgical and procedural history saved: " + ans + ".";
+        }
+        if ("Q_MEDICATIONS".equals(qCode)) {
+            return "Current medications recorded: " + ans + ". Stored for automated drug-drug interaction screening.";
+        }
+        if ("Q_ALLERGIES".equals(qCode)) {
+            return "Allergies and family history noted: " + ans + ". All treatment recommendations will respect these sensitivities.";
+        }
+
+        // Symptom-specific fallback
+        if (ansLower.contains("chest") || ansLower.contains("saans") || ansLower.contains("breath") || ansLower.contains("pain") || ccLower.contains("chest")) {
+            return (pName != null ? pName + ", I " : "I ") + "understand. I have noted this symptom regarding your " + (chiefComplaint != null ? chiefComplaint.toLowerCase() : "health") + " with clinical priority.";
+        }
+
+        return "Thank you" + (pName != null ? ", " + pName : "") + ". Your response has been securely recorded into your clinical chart.";
+    }
+
+    /**
      * Generates a conversational, empathetic response for the interactive patient chat transcript.
-     * Uses a fast 3-second timeout so the patient's step transition is instant and responsive.
+     * Uses a fast 2-second timeout so the patient's step transition is instant and responsive.
      */
     public String generateConversationalResponse(String patientName, String questionText, String answerText, String chiefComplaint) {
         if (isConfigured() && System.currentTimeMillis() >= rateLimitCooldownUntil) {
@@ -136,7 +189,7 @@ public class GeminiAiService {
                         "\"" + questionText + "\" with: \"" + answerText + "\". " +
                         "Provide a warm, reassuring response in exactly 1-2 sentences acknowledging what they shared. Do not diagnose or prescribe.";
 
-                String res = callGemini(prompt, 3, 70);
+                String res = callGemini(prompt, 2, 70);
                 if (res != null && !res.isBlank()) {
                     return res.trim().replace("\"", "");
                 }

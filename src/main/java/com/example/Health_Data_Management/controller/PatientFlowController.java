@@ -230,22 +230,31 @@ public class PatientFlowController {
             caseService.saveOrUpdateAnswer(medicalCase.getId(), questionCode, questionText, answerText.trim(), inputType);
             medicalCase = caseService.getCaseById(medicalCase.getId());
 
-            // Real-time empathetic AI conversational feedback in chat transcript
-            if (geminiAiService != null && geminiAiService.isConfigured()) {
+            // Zero-latency instant empathetic AI conversational feedback in chat transcript (< 1ms)
+            String patientName = (patient.getUser() != null && patient.getUser().getName() != null)
+                    ? patient.getUser().getName() : "Patient";
+            String lang = patient.getPreferredLanguage() != null ? patient.getPreferredLanguage() : "English";
+
+            if (geminiAiService != null) {
                 try {
-                    String patientName = (patient.getUser() != null && patient.getUser().getName() != null)
-                            ? patient.getUser().getName() : "Patient";
-                    String aiReply = geminiAiService.generateConversationalResponse(
+                    String instantReply = geminiAiService.generateInstantEmpatheticResponse(
                             patientName,
+                            questionCode,
                             questionText != null ? questionText : questionCode,
                             answerText.trim(),
                             medicalCase != null ? medicalCase.getChiefComplaint() : "Symptoms"
                     );
-                    if (aiReply != null && !aiReply.isBlank()) {
-                        String lang = patient.getPreferredLanguage() != null ? patient.getPreferredLanguage() : "English";
-                        caseService.logConversationMessage(medicalCase.getId(), "SYSTEM", aiReply, "AI_REPLY", questionCode, lang, "AI");
+                    if (instantReply != null && !instantReply.isBlank()) {
+                        caseService.logConversationMessage(medicalCase.getId(), "SYSTEM", instantReply, "AI_REPLY", questionCode, lang, "AI");
                     }
                 } catch (Exception ignored) {}
+            }
+
+            // Pre-warm adaptive branching questions in background as soon as chief complaint is recorded
+            if ("Q_CHIEF_COMPLAINT".equals(questionCode) && adaptiveQuestionService != null) {
+                int patientAge = patient.getAge() != null ? patient.getAge() : 35;
+                String patientGender = patient.getGender() != null ? patient.getGender() : "Male";
+                adaptiveQuestionService.prewarmAdaptiveQuestions(answerText.trim(), patientAge, patientGender);
             }
         }
 

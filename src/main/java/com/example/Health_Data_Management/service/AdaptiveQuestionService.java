@@ -15,10 +15,28 @@ public class AdaptiveQuestionService {
 
     private final GeminiAiService geminiAiService;
     private final LocalMlInferenceService localMlInferenceService;
+    private final Map<String, List<AdaptiveQuestion>> prewarmedQuestions = new java.util.concurrent.ConcurrentHashMap<>();
 
     public AdaptiveQuestionService(GeminiAiService geminiAiService, LocalMlInferenceService localMlInferenceService) {
         this.geminiAiService = geminiAiService;
         this.localMlInferenceService = localMlInferenceService;
+    }
+
+    /**
+     * Pre-warms Gemini AI adaptive branching questions in the background without blocking UI requests.
+     */
+    public void prewarmAdaptiveQuestions(String chiefComplaint, int age, String gender) {
+        if (chiefComplaint == null || geminiAiService == null || !geminiAiService.isConfigured()) return;
+        String key = chiefComplaint.toLowerCase().trim();
+        if (prewarmedQuestions.containsKey(key)) return;
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                List<AdaptiveQuestion> q = geminiAiService.generateAdaptiveQuestions(chiefComplaint, Map.of(), age, gender);
+                if (q != null && !q.isEmpty()) {
+                    prewarmedQuestions.put(key, q);
+                }
+            } catch (Exception ignored) {}
+        });
     }
 
     public static class AdaptiveQuestion {
@@ -168,20 +186,25 @@ public class AdaptiveQuestionService {
     }
 
     /**
-     * Obtains adaptive follow-ups using Gemini AI with fallback to local ML model & rule-based engine.
+     * Obtains adaptive follow-ups using prewarmed Gemini AI with instant local ML & rule engine fallback.
+     * Guaranteed zero-latency (never blocks the HTTP request thread).
      */
     private List<AdaptiveQuestion> getAdaptiveFollowUps(String chiefComplaint, Map<String, String> existingAnswers, int age, String gender) {
         if (chiefComplaint == null) return Collections.emptyList();
 
-        // 1. Try Gemini AI if available
-        if (geminiAiService != null && geminiAiService.isConfigured()) {
-            List<AdaptiveQuestion> aiQuestions = geminiAiService.generateAdaptiveQuestions(chiefComplaint, existingAnswers, age, gender);
-            if (aiQuestions != null && !aiQuestions.isEmpty()) {
-                return aiQuestions;
-            }
+        String key = chiefComplaint.toLowerCase().trim();
+
+        // 1. Instant return from prewarmed / cached Gemini questions (<0.1ms)
+        if (prewarmedQuestions.containsKey(key)) {
+            return prewarmedQuestions.get(key);
         }
 
-        // 2. Query Local Random Forest ML classifier from mainmodel
+        // 2. Trigger asynchronous background warm-up if not yet started
+        if (geminiAiService != null && geminiAiService.isConfigured()) {
+            prewarmAdaptiveQuestions(chiefComplaint, age, gender);
+        }
+
+        // 3. Instant local ML prediction / complaint-specific clinical rules (<1ms)
         if (localMlInferenceService != null) {
             List<String> symptoms = new ArrayList<>();
             symptoms.add(chiefComplaint);
@@ -199,7 +222,7 @@ public class AdaptiveQuestionService {
             }
         }
 
-        // 3. Fallback to complaint-specific rules
+        // 4. Fallback to complaint-specific rules
         return getComplaintSpecificFollowUps(chiefComplaint, existingAnswers);
     }
 
