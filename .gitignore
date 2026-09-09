@@ -6,6 +6,9 @@ target/
 .DS_Store
 uploads/*
 !uploads/.gitkeep
+mainmodel/case_recognition_random_forest.pkl
+.env
+.env.local
 
 ### STS ###
 .apt_generated

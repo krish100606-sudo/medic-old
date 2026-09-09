@@ -21,6 +21,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.example.Health_Data_Management.service.GeminiAiService;
+import com.example.Health_Data_Management.service.LocalMlInferenceService;
+
 @Controller
 @RequestMapping("/patient")
 public class PatientFlowController {
@@ -29,6 +32,8 @@ public class PatientFlowController {
     private final UserRepository userRepository;
     private final CaseService caseService;
     private final AdaptiveQuestionService adaptiveQuestionService;
+    private final GeminiAiService geminiAiService;
+    private final LocalMlInferenceService localMlInferenceService;
 
     private final String uploadDir = "uploads";
 
@@ -36,11 +41,15 @@ public class PatientFlowController {
             PatientRepository patientRepository,
             UserRepository userRepository,
             CaseService caseService,
-            AdaptiveQuestionService adaptiveQuestionService) {
+            AdaptiveQuestionService adaptiveQuestionService,
+            GeminiAiService geminiAiService,
+            LocalMlInferenceService localMlInferenceService) {
         this.patientRepository = patientRepository;
         this.userRepository = userRepository;
         this.caseService = caseService;
         this.adaptiveQuestionService = adaptiveQuestionService;
+        this.geminiAiService = geminiAiService;
+        this.localMlInferenceService = localMlInferenceService;
 
         File dir = new File(uploadDir);
         if (!dir.exists()) {
@@ -167,8 +176,11 @@ public class PatientFlowController {
             }
         }
 
+        int age = patient.getAge() != null ? patient.getAge() : 35;
+        String gender = patient.getGender() != null ? patient.getGender() : "Male";
+
         List<AdaptiveQuestionService.AdaptiveQuestion> questions = adaptiveQuestionService.getQuestionsForCase(
-                medicalCase.getChiefComplaint(), existingAnswers);
+                medicalCase.getChiefComplaint(), existingAnswers, age, gender);
         int totalSteps = questions.isEmpty() ? 10 : questions.size();
 
         if (step < 1) step = 1;
@@ -217,6 +229,24 @@ public class PatientFlowController {
         if (questionCode != null && answerText != null && !answerText.trim().isEmpty()) {
             caseService.saveOrUpdateAnswer(medicalCase.getId(), questionCode, questionText, answerText.trim(), inputType);
             medicalCase = caseService.getCaseById(medicalCase.getId());
+
+            // Real-time empathetic AI conversational feedback in chat transcript
+            if (geminiAiService != null && geminiAiService.isConfigured()) {
+                try {
+                    String patientName = (patient.getUser() != null && patient.getUser().getName() != null)
+                            ? patient.getUser().getName() : "Patient";
+                    String aiReply = geminiAiService.generateConversationalResponse(
+                            patientName,
+                            questionText != null ? questionText : questionCode,
+                            answerText.trim(),
+                            medicalCase != null ? medicalCase.getChiefComplaint() : "Symptoms"
+                    );
+                    if (aiReply != null && !aiReply.isBlank()) {
+                        String lang = patient.getPreferredLanguage() != null ? patient.getPreferredLanguage() : "English";
+                        caseService.logConversationMessage(medicalCase.getId(), "SYSTEM", aiReply, "AI_REPLY", questionCode, lang, "AI");
+                    }
+                } catch (Exception ignored) {}
+            }
         }
 
         if ("exit".equalsIgnoreCase(action)) {
@@ -234,8 +264,10 @@ public class PatientFlowController {
                 existingAnswers.put(a.getQuestionCode(), a.getAnswerText());
             }
         }
+        int age = patient.getAge() != null ? patient.getAge() : 35;
+        String gender = patient.getGender() != null ? patient.getGender() : "Male";
         String currentChief = medicalCase != null ? medicalCase.getChiefComplaint() : null;
-        int totalSteps = adaptiveQuestionService.getTotalQuestionCount(currentChief, existingAnswers);
+        int totalSteps = adaptiveQuestionService.getTotalQuestionCount(currentChief, existingAnswers, age, gender);
 
         int nextStep = step + 1;
         if (nextStep > totalSteps) {

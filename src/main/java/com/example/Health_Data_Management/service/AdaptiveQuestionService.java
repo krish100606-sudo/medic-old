@@ -5,12 +5,21 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 
 /**
- * Adaptive Questioning Engine — rule-based clinical question branching.
- * Determines follow-up questions based on the patient's chief complaint
- * and previously answered questions.
+ * Adaptive Questioning Engine
+ * Powered by Gemini 3.5 Flash AI with seamless local ML & clinical rule fallback.
+ * Determines follow-up questions dynamically based on the patient's chief complaint,
+ * symptoms, and previously answered questions.
  */
 @Service
 public class AdaptiveQuestionService {
+
+    private final GeminiAiService geminiAiService;
+    private final LocalMlInferenceService localMlInferenceService;
+
+    public AdaptiveQuestionService(GeminiAiService geminiAiService, LocalMlInferenceService localMlInferenceService) {
+        this.geminiAiService = geminiAiService;
+        this.localMlInferenceService = localMlInferenceService;
+    }
 
     public static class AdaptiveQuestion {
         private final String questionCode;
@@ -42,10 +51,13 @@ public class AdaptiveQuestionService {
     }
 
     /**
-     * Returns the list of questions for the case-taking flow,
-     * dynamically adjusting based on the chief complaint and existing answers.
+     * Returns the list of questions for the case-taking flow.
      */
     public List<AdaptiveQuestion> getQuestionsForCase(String chiefComplaint, Map<String, String> existingAnswers) {
+        return getQuestionsForCase(chiefComplaint, existingAnswers, 35, "Male");
+    }
+
+    public List<AdaptiveQuestion> getQuestionsForCase(String chiefComplaint, Map<String, String> existingAnswers, int age, String gender) {
         List<AdaptiveQuestion> questions = new ArrayList<>();
 
         // Step 1: Chief Complaint (always first)
@@ -108,8 +120,8 @@ public class AdaptiveQuestionService {
                 true, true
         ));
 
-        // ADAPTIVE: Complaint-specific follow-ups (inserted between symptoms and past history)
-        List<AdaptiveQuestion> followUps = getComplaintSpecificFollowUps(chiefComplaint, existingAnswers);
+        // ADAPTIVE: Complaint-specific follow-ups (AI + Local ML + Rule Fallback)
+        List<AdaptiveQuestion> followUps = getAdaptiveFollowUps(chiefComplaint, existingAnswers, age, gender);
         questions.addAll(followUps);
 
         // Step 7+: Past Medical History
@@ -153,6 +165,42 @@ public class AdaptiveQuestionService {
         ));
 
         return questions;
+    }
+
+    /**
+     * Obtains adaptive follow-ups using Gemini AI with fallback to local ML model & rule-based engine.
+     */
+    private List<AdaptiveQuestion> getAdaptiveFollowUps(String chiefComplaint, Map<String, String> existingAnswers, int age, String gender) {
+        if (chiefComplaint == null) return Collections.emptyList();
+
+        // 1. Try Gemini AI if available
+        if (geminiAiService != null && geminiAiService.isConfigured()) {
+            List<AdaptiveQuestion> aiQuestions = geminiAiService.generateAdaptiveQuestions(chiefComplaint, existingAnswers, age, gender);
+            if (aiQuestions != null && !aiQuestions.isEmpty()) {
+                return aiQuestions;
+            }
+        }
+
+        // 2. Query Local Random Forest ML classifier from mainmodel
+        if (localMlInferenceService != null) {
+            List<String> symptoms = new ArrayList<>();
+            symptoms.add(chiefComplaint);
+            if (existingAnswers != null && existingAnswers.containsKey("Q_ASSOCIATED_SYMPTOMS")) {
+                symptoms.add(existingAnswers.get("Q_ASSOCIATED_SYMPTOMS"));
+            }
+            LocalMlInferenceService.MlInferenceResult mlResult = localMlInferenceService.predict(age, gender, symptoms);
+            if (mlResult != null && mlResult.getTopDisease() != null) {
+                String suspected = mlResult.getTopDisease().toLowerCase();
+                if (suspected.contains("heart") || suspected.contains("cardio") || suspected.contains("stroke")) {
+                    return getComplaintSpecificFollowUps("chest", existingAnswers);
+                } else if (suspected.contains("bronchitis") || suspected.contains("pneumonia") || suspected.contains("covid")) {
+                    return getComplaintSpecificFollowUps("fever", existingAnswers);
+                }
+            }
+        }
+
+        // 3. Fallback to complaint-specific rules
+        return getComplaintSpecificFollowUps(chiefComplaint, existingAnswers);
     }
 
     /**
@@ -225,7 +273,7 @@ public class AdaptiveQuestionService {
     }
 
     /**
-     * Returns complaint-specific follow-up questions for adaptive questioning
+     * Complaint-specific follow-up questions
      */
     private List<AdaptiveQuestion> getComplaintSpecificFollowUps(String chiefComplaint, Map<String, String> existingAnswers) {
         List<AdaptiveQuestion> followUps = new ArrayList<>();
@@ -293,19 +341,21 @@ public class AdaptiveQuestionService {
         return followUps;
     }
 
-    /**
-     * Returns the total number of questions for a given complaint
-     */
     public int getTotalQuestionCount(String chiefComplaint, Map<String, String> existingAnswers) {
         return getQuestionsForCase(chiefComplaint, existingAnswers).size();
     }
 
-    /**
-     * Returns a specific question by step index (0-based internally, 1-based for UI)
-     */
+    public int getTotalQuestionCount(String chiefComplaint, Map<String, String> existingAnswers, int age, String gender) {
+        return getQuestionsForCase(chiefComplaint, existingAnswers, age, gender).size();
+    }
+
     public AdaptiveQuestion getQuestionByStep(String chiefComplaint, Map<String, String> existingAnswers, int step) {
-        List<AdaptiveQuestion> questions = getQuestionsForCase(chiefComplaint, existingAnswers);
-        int index = step - 1; // Convert 1-based step to 0-based index
+        return getQuestionByStep(chiefComplaint, existingAnswers, step, 35, "Male");
+    }
+
+    public AdaptiveQuestion getQuestionByStep(String chiefComplaint, Map<String, String> existingAnswers, int step, int age, String gender) {
+        List<AdaptiveQuestion> questions = getQuestionsForCase(chiefComplaint, existingAnswers, age, gender);
+        int index = step - 1;
         if (index < 0 || index >= questions.size()) return null;
         return questions.get(index);
     }

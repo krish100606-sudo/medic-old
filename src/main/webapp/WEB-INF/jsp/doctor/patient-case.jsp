@@ -231,6 +231,58 @@
                     </c:choose>
                 </div>
 
+                <!-- AI & ML Clinical Intelligence Card -->
+                <c:if test="${not empty mlPrediction || not empty aiClinicalInsights}">
+                    <div class="mk-card mb-4 border-primary border-opacity-25 shadow-sm">
+                        <div class="mk-card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold text-primary mb-0">
+                                <i class="bi bi-robot me-2"></i>AI Clinical Intelligence & ML Disease Prediction
+                            </h6>
+                            <span class="badge bg-primary text-white">Gemini 3.5 Flash &bull; Random Forest ML</span>
+                        </div>
+                        <div class="p-3">
+                            <div class="row g-3">
+                                <c:if test="${not empty mlPrediction}">
+                                    <div class="col-md-5">
+                                        <div class="small text-muted fw-bold text-uppercase mb-2">
+                                            <i class="bi bi-cpu text-primary me-1"></i> Local ML Model Classification
+                                        </div>
+                                        <div class="p-3 bg-light rounded border mb-2">
+                                            <div class="small text-muted">Primary Suspected Condition:</div>
+                                            <div class="fs-5 fw-bold text-primary">${mlPrediction.topDisease}</div>
+                                            <div class="small text-muted mt-1">
+                                                Confidence: <span class="badge bg-success-subtle text-success border border-success-subtle">${(mlPrediction.topProbability * 100).intValue()}%</span>
+                                            </div>
+                                        </div>
+                                        <c:if test="${not empty mlPrediction.predictions}">
+                                            <div class="small text-muted fw-semibold mb-1">Differential Probabilities:</div>
+                                            <div class="d-flex flex-wrap gap-1">
+                                                <c:forEach var="p" items="${mlPrediction.predictions}">
+                                                    <span class="badge bg-white text-dark border small p-1 px-2">
+                                                        ${p.disease} (${(p.probability * 100).intValue()}%)
+                                                    </span>
+                                                </c:forEach>
+                                            </div>
+                                        </c:if>
+                                    </div>
+                                </c:if>
+
+                                <c:if test="${not empty aiClinicalInsights}">
+                                    <div class="${not empty mlPrediction ? 'col-md-7' : 'col-12'}">
+                                        <div class="small text-muted fw-bold text-uppercase mb-2">
+                                            <i class="bi bi-stars text-warning me-1"></i> Gemini AI Clinical Impression
+                                        </div>
+                                        <div class="p-3 bg-light rounded border small text-dark" style="white-space: pre-wrap; line-height: 1.5;">${aiClinicalInsights}</div>
+                                    </div>
+                                </c:if>
+                            </div>
+                            <div class="text-muted small mt-2" style="font-size: 0.76rem;">
+                                <i class="bi bi-info-circle me-1"></i> AI & ML outputs are non-diagnostic assistive triage indicators to assist the clinician.
+                            </div>
+                        </div>
+                    </div>
+                </c:if>
+
                 <!-- Structured Summary Preview Card -->
                 <div class="mk-card mb-4">
                     <div class="mk-card-header">

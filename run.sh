@@ -8,6 +8,14 @@ set -e
 
 PORT=${PORT:-8083}
 
+# Load environment variables from .env if present
+if [ -f ".env" ]; then
+    echo "✓ Loading environment variables from .env"
+    set -a
+    source .env
+    set +a
+fi
+
 echo "=========================================="
 echo "  Health Data Management - Spring Boot"
 echo "=========================================="

@@ -9,7 +9,12 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import com.example.Health_Data_Management.service.GeminiAiService;
+import com.example.Health_Data_Management.service.LocalMlInferenceService;
 
 @Controller
 @RequestMapping("/doctor")
@@ -18,14 +23,20 @@ public class DoctorPortalController {
     private final CaseService caseService;
     private final DoctorRepository doctorRepository;
     private final UserRepository userRepository;
+    private final LocalMlInferenceService localMlInferenceService;
+    private final GeminiAiService geminiAiService;
 
     public DoctorPortalController(
             CaseService caseService,
             DoctorRepository doctorRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            LocalMlInferenceService localMlInferenceService,
+            GeminiAiService geminiAiService) {
         this.caseService = caseService;
         this.doctorRepository = doctorRepository;
         this.userRepository = userRepository;
+        this.localMlInferenceService = localMlInferenceService;
+        this.geminiAiService = geminiAiService;
     }
 
     private Doctor getCurrentDoctor(Authentication authentication) {
@@ -89,6 +100,32 @@ public class DoctorPortalController {
         if (medicalCase.getStatus() == CaseStatus.SUBMITTED) {
             medicalCase = caseService.doctorReviewCase(caseId, doctor);
         }
+
+        // ML & Gemini Clinical Insights
+        int age = (medicalCase.getPatient() != null && medicalCase.getPatient().getAge() != null)
+                ? medicalCase.getPatient().getAge() : 35;
+        String gender = (medicalCase.getPatient() != null && medicalCase.getPatient().getGender() != null)
+                ? medicalCase.getPatient().getGender() : "Male";
+
+        List<String> symptoms = new ArrayList<>();
+        if (medicalCase.getChiefComplaint() != null) symptoms.add(medicalCase.getChiefComplaint());
+        if (medicalCase.getAssociatedSymptoms() != null) symptoms.add(medicalCase.getAssociatedSymptoms());
+        if (medicalCase.getPatientStatement() != null) symptoms.add(medicalCase.getPatientStatement());
+
+        LocalMlInferenceService.MlInferenceResult mlResult = localMlInferenceService.predict(age, gender, symptoms);
+        model.addAttribute("mlPrediction", mlResult);
+
+        Map<String, String> answersMap = new HashMap<>();
+        if (medicalCase.getAnswers() != null) {
+            medicalCase.getAnswers().forEach(a -> answersMap.put(a.getQuestionCode(), a.getAnswerText()));
+        }
+        String aiInsights = geminiAiService.generateClinicalInsights(
+                medicalCase.getChiefComplaint(),
+                answersMap,
+                mlResult != null ? mlResult.getTopDisease() : "General Clinical Evaluation",
+                mlResult != null ? mlResult.getTopProbability() : 0.5
+        );
+        model.addAttribute("aiClinicalInsights", aiInsights);
 
         model.addAttribute("doctor", doctor);
         model.addAttribute("medicalCase", medicalCase);

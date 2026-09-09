@@ -113,6 +113,12 @@ class FlowVerificationTest {
         assertNotNull(submitted.getStructuredSummary());
     }
 
+    @Autowired
+    private GeminiAiService geminiAiService;
+
+    @Autowired
+    private LocalMlInferenceService localMlInferenceService;
+
     @Test
     void testSummaryGeneration() {
         MedicalCase mc = new MedicalCase();
@@ -120,5 +126,24 @@ class FlowVerificationTest {
         String summary = summaryService.generateStructuredSummary(mc, List.of());
         assertNotNull(summary);
         assertTrue(summary.contains("Migraine"));
+    }
+
+    @Test
+    void testGeminiAndLocalMlIntegration() {
+        // Test Gemini configuration
+        assertNotNull(geminiAiService);
+        assertTrue(geminiAiService.isConfigured(), "Gemini AI API key should be configured");
+
+        // Test fallback conversational response
+        String reply = geminiAiService.generateConversationalResponse("Rahul", "What is your main health problem?", "Chest pain and sweating", "Chest Pain");
+        assertNotNull(reply);
+        assertFalse(reply.isBlank());
+
+        // Test Local Random Forest ML inference
+        LocalMlInferenceService.MlInferenceResult mlResult = localMlInferenceService.predict(45, "Male", List.of("chest pain", "sweating", "shortness of breath"));
+        assertNotNull(mlResult);
+        assertNotNull(mlResult.getTopDisease());
+        assertNotNull(mlResult.getPredictions());
+        assertFalse(mlResult.getPredictions().isEmpty());
     }
 }
