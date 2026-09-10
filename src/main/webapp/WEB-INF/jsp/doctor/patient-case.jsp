@@ -232,56 +232,157 @@
                 </div>
 
                 <!-- AI & ML Clinical Intelligence Card -->
-                <c:if test="${not empty mlPrediction || not empty aiClinicalInsights}">
-                    <div class="mk-card mb-4 border-primary border-opacity-25 shadow-sm">
-                        <div class="mk-card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+                <!-- AI Summary & Related Cases Card (Multi-Patient Comparative Intelligence) -->
+                <div class="mk-card mb-4 border-primary border-opacity-25 shadow-sm">
+                    <div class="mk-card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-2">
                             <h6 class="fw-bold text-primary mb-0">
-                                <i class="bi bi-robot me-2"></i>AI Clinical Intelligence & ML Disease Prediction
+                                <i class="bi bi-diagram-3-fill me-2"></i>AI Summary & Related Cases
                             </h6>
-                            <span class="badge bg-primary text-white">Gemini 3.5 Flash &bull; Random Forest ML</span>
+                            <span class="badge bg-secondary-subtle text-secondary border small">Continuous Learning</span>
                         </div>
-                        <div class="p-3">
-                            <div class="row g-3">
-                                <c:if test="${not empty mlPrediction}">
-                                    <div class="col-md-5">
-                                        <div class="small text-muted fw-bold text-uppercase mb-2">
-                                            <i class="bi bi-cpu text-primary me-1"></i> Local ML Model Classification
-                                        </div>
-                                        <div class="p-3 bg-light rounded border mb-2">
-                                            <div class="small text-muted">Primary Suspected Condition:</div>
-                                            <div class="fs-5 fw-bold text-primary">${mlPrediction.topDisease}</div>
-                                            <div class="small text-muted mt-1">
-                                                Confidence: <span class="badge bg-success-subtle text-success border border-success-subtle">${(mlPrediction.topProbability * 100).intValue()}%</span>
-                                            </div>
-                                        </div>
-                                        <c:if test="${not empty mlPrediction.predictions}">
-                                            <div class="small text-muted fw-semibold mb-1">Differential Probabilities:</div>
-                                            <div class="d-flex flex-wrap gap-1">
-                                                <c:forEach var="p" items="${mlPrediction.predictions}">
-                                                    <span class="badge bg-white text-dark border small p-1 px-2">
-                                                        ${p.disease} (${(p.probability * 100).intValue()}%)
-                                                    </span>
-                                                </c:forEach>
-                                            </div>
-                                        </c:if>
+                        <span class="badge bg-primary text-white">
+                            <i class="bi bi-diagram-3 me-1"></i> Multi-Patient Pattern Matching
+                        </span>
+                    </div>
+                    <div class="p-3">
+                        <div class="row g-3">
+                            <!-- Left Column: Related Cases from Other Patients -->
+                            <div class="col-lg-5 border-end">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="small text-muted fw-bold text-uppercase">
+                                        <i class="bi bi-people-fill text-primary me-1"></i> Related Cases from Patients
                                     </div>
-                                </c:if>
+                                    <span class="badge bg-light text-muted border small">
+                                        ${not empty similarCases ? similarCases.size() : 0} Matched
+                                    </span>
+                                </div>
+                                <div class="alert alert-info py-2 px-2 mb-2 d-flex align-items-center gap-2" style="font-size: 0.74rem;">
+                                    <i class="bi bi-database-check text-info fs-6"></i>
+                                    <span><strong>Dynamic Learning Engine:</strong> Cross-referenced with verified cases from other patients. As you verify cases, the system indexes them to continually refine future differentials.</span>
+                                </div>
 
-                                <c:if test="${not empty aiClinicalInsights}">
-                                    <div class="${not empty mlPrediction ? 'col-md-7' : 'col-12'}">
-                                        <div class="small text-muted fw-bold text-uppercase mb-2">
-                                            <i class="bi bi-stars text-warning me-1"></i> Gemini AI Clinical Impression
+                                <c:choose>
+                                    <c:when test="${not empty similarCases}">
+                                        <div class="d-flex flex-column gap-2 mb-3">
+                                            <c:forEach var="sc" items="${similarCases}">
+                                                <div class="p-2 bg-light rounded border">
+                                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                                        <span class="fw-bold text-dark small">
+                                                            <i class="bi bi-file-earmark-medical text-primary me-1"></i>${sc.caseNumber}
+                                                            <span class="text-muted fw-normal" style="font-size: 0.75rem;">(${sc.patientAge != null ? sc.patientAge : 40}y, ${sc.patientGender})</span>
+                                                        </span>
+                                                        <span class="badge ${sc.similarityScore >= 70 ? 'bg-success' : (sc.similarityScore >= 45 ? 'bg-primary' : 'bg-secondary')} small">
+                                                            ${sc.similarityScore}% Match
+                                                        </span>
+                                                    </div>
+                                                    <div class="small mb-1">
+                                                        <span class="text-muted">Diagnosis:</span>
+                                                        <strong class="text-dark">${sc.diagnosis}</strong>
+                                                    </div>
+                                                    <div class="small text-muted mb-1 text-truncate" title="${sc.treatment}">
+                                                        <span class="text-secondary fw-semibold">Rx:</span> ${sc.treatment}
+                                                    </div>
+                                                    <div class="d-flex justify-content-between align-items-center pt-1 border-top" style="font-size: 0.72rem;">
+                                                        <span class="text-success fw-semibold">
+                                                            <i class="bi bi-check-circle me-1"></i>${sc.outcome}
+                                                        </span>
+                                                        <c:if test="${not empty sc.matchReasons}">
+                                                            <span class="text-muted text-truncate" style="max-width: 140px;" title="${sc.matchReasons[0]}">${sc.matchReasons[0]}</span>
+                                                        </c:if>
+                                                    </div>
+                                                </div>
+                                            </c:forEach>
                                         </div>
-                                        <div class="p-3 bg-light rounded border small text-dark" style="white-space: pre-wrap; line-height: 1.5;">${aiClinicalInsights}</div>
+                                    </c:when>
+                                    <c:otherwise>
+                                        <div class="p-3 bg-light rounded border text-center text-muted small mb-3">
+                                            <i class="bi bi-info-circle me-1"></i> No prior similar cases found yet. Once this case is verified, it will be added to the reference database.
+                                        </div>
+                                    </c:otherwise>
+                                </c:choose>
+
+                                <!-- Secondary ML Model Classification if available -->
+                                <c:if test="${not empty mlPrediction && mlPrediction.topProbability >= 0.45}">
+                                    <div class="p-2 bg-white rounded border small mt-2">
+                                        <div class="text-muted small fw-semibold">High-Confidence ML Pattern:</div>
+                                        <div class="fw-bold text-dark">${mlPrediction.topDisease} <span class="badge bg-light text-muted border">${(mlPrediction.topProbability * 100).intValue()}%</span></div>
                                     </div>
                                 </c:if>
                             </div>
-                            <div class="text-muted small mt-2" style="font-size: 0.76rem;">
-                                <i class="bi bi-info-circle me-1"></i> AI & ML outputs are non-diagnostic assistive triage indicators to assist the clinician.
+
+                            <!-- Right Column: AI Clinical Summary & Decision-Support Suggestion -->
+                            <div class="col-lg-7">
+                                <div class="small text-muted fw-bold text-uppercase mb-2">
+                                    <i class="bi bi-stars text-warning me-1"></i> AI Clinical Summary & Differential Synthesis
+                                </div>
+                                
+                                <!-- Clean Rendered Clinical Summary (No Raw Asterisks) -->
+                                <div class="p-3 bg-light rounded border small text-dark mb-3" style="line-height: 1.55;">
+                                    ${aiClinicalInsights}
+                                </div>
+
+                                <!-- AI-Drafted Suggestion Card (Accept / Edit / Reject) -->
+                                <c:if test="${not empty aiSuggestion}">
+                                    <div class="card border-primary border-opacity-50 shadow-sm ai-suggestion-card mb-2" id="aiSuggestionBox">
+                                        <div class="card-body p-3 bg-primary bg-opacity-10 rounded">
+                                            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
+                                                <span class="badge bg-primary text-white">
+                                                    <i class="bi bi-robot me-1"></i> AI-Suggested — Requires Doctor Review
+                                                </span>
+                                                <span class="badge bg-white text-dark border small">${aiSuggestion.confidence}</span>
+                                            </div>
+                                            
+                                            <div class="mb-2">
+                                                <div class="small text-muted fw-semibold">Possible Diagnosis:</div>
+                                                <div class="fw-bold text-dark fs-6" id="suggestedDiagnosis">${aiSuggestion.diagnosis_suggestion}</div>
+                                            </div>
+
+                                            <div class="mb-2 small text-secondary">
+                                                <strong>Reasoning:</strong> <span id="suggestedReasoning">${aiSuggestion.reasoning}</span>
+                                            </div>
+
+                                            <c:if test="${not empty aiSuggestion.treatment_options}">
+                                                <div class="mb-2">
+                                                    <div class="small text-muted fw-semibold">Suggested Treatment / Orders:</div>
+                                                    <ul class="mb-0 ps-3 small text-dark" id="suggestedTreatmentList">
+                                                        <c:forEach var="opt" items="${aiSuggestion.treatment_options}">
+                                                            <li>${opt}</li>
+                                                        </c:forEach>
+                                                    </ul>
+                                                </div>
+                                            </c:if>
+
+                                            <!-- Persistent Non-Diagnostic Disclaimer -->
+                                            <div class="alert alert-warning py-1 px-2 mb-2 small text-dark d-flex align-items-start gap-2" style="font-size: 0.74rem;">
+                                                <i class="bi bi-shield-exclamation text-warning mt-1 fs-6"></i>
+                                                <span><strong>Clinical Safety Advisory:</strong> AI-generated suggestion based on similar case history — not an automated diagnosis. Doctor must verify and finalize before saving to patient record.</span>
+                                            </div>
+
+                                            <!-- Doctor Action Buttons -->
+                                            <div class="d-flex flex-wrap gap-2 mt-2 pt-2 border-top">
+                                                <button type="button" class="btn btn-sm btn-primary d-flex align-items-center gap-1" onclick="acceptAiSuggestion()">
+                                                    <i class="bi bi-check-lg"></i> Accept Suggestion
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1" onclick="editAiSuggestion()">
+                                                    <i class="bi bi-pencil-square"></i> Edit & Use
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1" onclick="rejectAiSuggestion()">
+                                                    <i class="bi bi-x-lg"></i> Dismiss
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </c:if>
                             </div>
+                        </div>
+
+                        <!-- Persistent Footer Disclaimer -->
+                        <div class="text-muted small mt-2 d-flex align-items-center gap-1" style="font-size: 0.76rem;">
+                            <i class="bi bi-info-circle me-1"></i> AI & Multi-Patient case analyses are non-diagnostic assistive indicators. Final diagnosis and care remain the sole responsibility of the treating clinician.
                         </div>
                     </div>
-                </c:if>
+                </div>
 
                 <!-- Structured Summary Preview Card -->
                 <div class="mk-card mb-4">
@@ -317,6 +418,7 @@
 
             <!-- Right Column: Doctor Review, Editable Fields & Verification Form -->
             <div class="col-lg-5">
+                <div class="mk-sticky-review-panel">
 
                 <!-- Doctor Editing & Verification Card -->
                 <div class="mk-card mb-4">
@@ -398,6 +500,46 @@
                             <input type="text" class="form-control" name="investigations" value="${medicalCase.investigations}">
                         </div>
 
+                        <!-- Doctor Confirmed Official Diagnosis -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label fw-semibold small text-dark mb-0">
+                                    <i class="bi bi-clipboard2-pulse text-primary me-1"></i> Physician Confirmed Diagnosis
+                                </label>
+                                <span class="badge bg-primary-subtle text-primary small">Official Diagnosis</span>
+                            </div>
+                            <input type="text" class="form-control fw-semibold" id="formDiagnosis" name="diagnosis" value="${medicalCase.diagnosis}" placeholder="e.g. Acute Coronary Syndrome, Acute Bronchial Asthma, etc.">
+                        </div>
+
+                        <!-- Prescribed Treatment & Clinical Orders -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label fw-semibold small text-dark mb-0">
+                                    <i class="bi bi-prescription text-primary me-1"></i> Prescribed Treatment & Clinical Orders
+                                </label>
+                                <span class="badge bg-light text-muted small">Rx & Regimen</span>
+                            </div>
+                            <textarea class="form-control" id="formTreatment" name="treatment" rows="3" placeholder="Prescribed medications, dosage, orders, and instructions...">${medicalCase.treatment}</textarea>
+                        </div>
+
+                        <!-- Vitals at Review & Clinical Outcome -->
+                        <div class="row g-2 mb-3">
+                            <div class="col-7">
+                                <label class="form-label fw-semibold small text-muted">Vitals at Review</label>
+                                <input type="text" class="form-control" id="formVitals" name="vitals" value="${not empty medicalCase.vitals ? medicalCase.vitals : 'BP: 120/80 mmHg, HR: 78 bpm, Temp: 98.6°F, SpO2: 98%'}">
+                            </div>
+                            <div class="col-5">
+                                <label class="form-label fw-semibold small text-muted">Clinical Outcome</label>
+                                <select class="form-select" id="formOutcome" name="outcome">
+                                    <option value="Under Active Treatment" ${medicalCase.outcome == 'Under Active Treatment' ? 'selected' : ''}>Under Treatment</option>
+                                    <option value="Recovered" ${medicalCase.outcome == 'Recovered' ? 'selected' : ''}>Recovered</option>
+                                    <option value="Stabilized" ${medicalCase.outcome == 'Stabilized' ? 'selected' : ''}>Stabilized</option>
+                                    <option value="Improved" ${medicalCase.outcome == 'Improved' ? 'selected' : ''}>Improved</option>
+                                    <option value="Referred to Specialist" ${medicalCase.outcome == 'Referred to Specialist' ? 'selected' : ''}>Referred</option>
+                                </select>
+                            </div>
+                        </div>
+
                         <div class="mb-4">
                             <label class="form-label fw-semibold small text-muted">Doctor's Clinical Notes & Assessment Plan</label>
                             <textarea class="form-control" name="doctorClinicalNotes" rows="3" placeholder="Enter clinical assessment, differential diagnosis, and recommended plan...">${medicalCase.doctorClinicalNotes}</textarea>
@@ -446,5 +588,77 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function acceptAiSuggestion() {
+            const diag = document.getElementById('suggestedDiagnosis')?.innerText?.trim();
+            const listItems = document.querySelectorAll('#suggestedTreatmentList li');
+            let treatments = [];
+            listItems.forEach(li => treatments.push(li.innerText.trim()));
+            const treatmentText = treatments.join('\n');
+
+            const diagInput = document.getElementById('formDiagnosis');
+            const treatInput = document.getElementById('formTreatment');
+
+            if (diagInput && diag) diagInput.value = diag;
+            if (treatInput && treatmentText) treatInput.value = treatmentText;
+
+            logSuggestionAudit('ACCEPTED', diag, treatmentText);
+
+            // Scroll to the doctor edit form and flash outline
+            const formCard = document.getElementById('doctorEditForm');
+            if (formCard) {
+                formCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            if (diagInput) {
+                diagInput.classList.add('bg-success', 'bg-opacity-10', 'border-success');
+                setTimeout(() => diagInput.classList.remove('bg-success', 'bg-opacity-10', 'border-success'), 3000);
+            }
+            if (treatInput) {
+                treatInput.classList.add('bg-success', 'bg-opacity-10', 'border-success');
+                setTimeout(() => treatInput.classList.remove('bg-success', 'bg-opacity-10', 'border-success'), 3000);
+            }
+        }
+
+        function editAiSuggestion() {
+            acceptAiSuggestion();
+            const diagInput = document.getElementById('formDiagnosis');
+            if (diagInput) {
+                diagInput.focus();
+                diagInput.select();
+            }
+            logSuggestionAudit('EDITED');
+        }
+
+        function rejectAiSuggestion() {
+            const box = document.getElementById('aiSuggestionBox');
+            if (box) {
+                box.style.transition = 'opacity 0.4s ease';
+                box.style.opacity = '0.35';
+                box.style.pointerEvents = 'none';
+            }
+            logSuggestionAudit('REJECTED');
+        }
+
+        function logSuggestionAudit(action, finalDiag, finalTreat) {
+            const caseId = '${medicalCase.id}';
+            const diag = document.getElementById('suggestedDiagnosis')?.innerText?.trim() || '';
+            const reasoning = document.getElementById('suggestedReasoning')?.innerText?.trim() || '';
+
+            fetch('/doctor/case/' + caseId + '/suggestion-audit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: action,
+                    aiDiagnosisSuggestion: diag,
+                    aiReasoning: reasoning,
+                    finalDiagnosis: finalDiag || document.getElementById('formDiagnosis')?.value || '',
+                    finalTreatment: finalTreat || document.getElementById('formTreatment')?.value || '',
+                    doctorNotes: document.querySelector('textarea[name="doctorClinicalNotes"]')?.value || ''
+                })
+            }).then(r => r.json()).then(data => {
+                console.log('AI Decision Audit recorded:', data);
+            }).catch(e => console.warn('Could not record audit log:', e));
+        }
+    </script>
 </body>
 </html>

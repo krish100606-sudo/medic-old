@@ -538,3 +538,33 @@ body {
   max-width: 460px;
   height: 140px;
 }
+
+/* ---------------- Sticky Clinician Review Panel (Pinned Right) ---------------- */
+.mk-sticky-review-panel {
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 2.5rem);
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mk-border) transparent;
+}
+
+.mk-sticky-review-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.mk-sticky-review-panel::-webkit-scrollbar-thumb {
+  background: var(--mk-border);
+  border-radius: 4px;
+}
+
+@media (max-width: 991px) {
+  .mk-sticky-review-panel {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
+  }
+}
+

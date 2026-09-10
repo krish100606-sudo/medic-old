@@ -10,9 +10,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import com.example.Health_Data_Management.service.GeminiAiService;
 import com.example.Health_Data_Management.service.LocalMlInferenceService;
 
@@ -25,18 +23,21 @@ public class DoctorPortalController {
     private final UserRepository userRepository;
     private final LocalMlInferenceService localMlInferenceService;
     private final GeminiAiService geminiAiService;
+    private final com.example.Health_Data_Management.service.CaseSimilarityService caseSimilarityService;
 
     public DoctorPortalController(
             CaseService caseService,
             DoctorRepository doctorRepository,
             UserRepository userRepository,
             LocalMlInferenceService localMlInferenceService,
-            GeminiAiService geminiAiService) {
+            GeminiAiService geminiAiService,
+            com.example.Health_Data_Management.service.CaseSimilarityService caseSimilarityService) {
         this.caseService = caseService;
         this.doctorRepository = doctorRepository;
         this.userRepository = userRepository;
         this.localMlInferenceService = localMlInferenceService;
         this.geminiAiService = geminiAiService;
+        this.caseSimilarityService = caseSimilarityService;
     }
 
     private Doctor getCurrentDoctor(Authentication authentication) {
@@ -103,7 +104,7 @@ public class DoctorPortalController {
 
         // ML & Gemini Clinical Insights
         int age = (medicalCase.getPatient() != null && medicalCase.getPatient().getAge() != null)
-                ? medicalCase.getPatient().getAge() : 35;
+                ? medicalCase.getPatient().getAge().intValue() : 35;
         String gender = (medicalCase.getPatient() != null && medicalCase.getPatient().getGender() != null)
                 ? medicalCase.getPatient().getGender() : "Male";
 
@@ -115,17 +116,28 @@ public class DoctorPortalController {
         LocalMlInferenceService.MlInferenceResult mlResult = localMlInferenceService.predict(age, gender, symptoms);
         model.addAttribute("mlPrediction", mlResult);
 
-        Map<String, String> answersMap = new HashMap<>();
-        if (medicalCase.getAnswers() != null) {
-            medicalCase.getAnswers().forEach(a -> answersMap.put(a.getQuestionCode(), a.getAnswerText()));
-        }
-        String aiInsights = geminiAiService.generateClinicalInsights(
-                medicalCase.getChiefComplaint(),
-                answersMap,
-                mlResult != null ? mlResult.getTopDisease() : "General Clinical Evaluation",
-                mlResult != null ? mlResult.getTopProbability() : 0.5
+        // Retrieve similar / related past cases from other patients
+        List<com.example.Health_Data_Management.dto.SimilarCaseDto> similarCases =
+                caseSimilarityService.findSimilarCases(caseId, 4);
+        model.addAttribute("similarCases", similarCases);
+
+        // Filter out noisy flat ML indications (< 40%) so AI thinks on broad clinical picture rather than anchoring on COVID-19 8%
+        String topMl = (mlResult != null && mlResult.getTopProbability() >= 0.40) ? mlResult.getTopDisease() : null;
+        double topMlProb = (mlResult != null && mlResult.getTopProbability() >= 0.40) ? mlResult.getTopProbability() : 0.0;
+
+        // Generate broad-picture AI clinical summary comparing against other patients
+        String aiInsights = geminiAiService.generateBroadClinicalSummary(
+                medicalCase,
+                similarCases,
+                topMl,
+                topMlProb
         );
         model.addAttribute("aiClinicalInsights", aiInsights);
+
+        // Decision-support AI Suggestion (Accept / Edit / Reject)
+        com.example.Health_Data_Management.dto.AiSuggestionResponse aiSuggestion =
+                geminiAiService.generateStructuredSuggestion(medicalCase, similarCases);
+        model.addAttribute("aiSuggestion", aiSuggestion);
 
         model.addAttribute("doctor", doctor);
         model.addAttribute("medicalCase", medicalCase);
@@ -150,7 +162,11 @@ public class DoctorPortalController {
             @RequestParam(value = "allergies", required = false) String allergies,
             @RequestParam(value = "investigations", required = false) String investigations,
             @RequestParam(value = "doctorClinicalNotes", required = false) String doctorClinicalNotes,
-            @RequestParam(value = "priority", defaultValue = "HIGH") String priorityStr) {
+            @RequestParam(value = "priority", defaultValue = "HIGH") String priorityStr,
+            @RequestParam(value = "diagnosis", required = false) String diagnosis,
+            @RequestParam(value = "treatment", required = false) String treatment,
+            @RequestParam(value = "vitals", required = false) String vitals,
+            @RequestParam(value = "outcome", required = false) String outcome) {
 
         CasePriority priority = CasePriority.NORMAL;
         try {
@@ -158,7 +174,8 @@ public class DoctorPortalController {
         } catch (Exception ignored) {}
 
         caseService.doctorEditCase(caseId, chiefComplaint, patientStatement, pastMedicalHistory,
-                currentMedication, allergies, investigations, doctorClinicalNotes, priority);
+                currentMedication, allergies, investigations, doctorClinicalNotes, priority,
+                diagnosis, treatment, vitals, outcome);
 
         return "redirect:/doctor/case/" + caseId + "?edited=true";
     }
@@ -175,6 +192,10 @@ public class DoctorPortalController {
             @RequestParam(value = "doctorClinicalNotes", required = false) String doctorClinicalNotes,
             @RequestParam(value = "doctorNotes", required = false) String doctorNotes,
             @RequestParam(value = "priority", defaultValue = "NORMAL") String priorityStr,
+            @RequestParam(value = "diagnosis", required = false) String diagnosis,
+            @RequestParam(value = "treatment", required = false) String treatment,
+            @RequestParam(value = "vitals", required = false) String vitals,
+            @RequestParam(value = "outcome", required = false) String outcome,
             Authentication authentication) {
 
         String finalNotes = (doctorClinicalNotes != null && !doctorClinicalNotes.trim().isEmpty()) ?
@@ -186,7 +207,8 @@ public class DoctorPortalController {
                 priority = CasePriority.valueOf(priorityStr.toUpperCase());
             } catch (Exception ignored) {}
             caseService.doctorEditCase(caseId, chiefComplaint, patientStatement, pastMedicalHistory,
-                    currentMedication, allergies, investigations, finalNotes, priority);
+                    currentMedication, allergies, investigations, finalNotes, priority,
+                    diagnosis, treatment, vitals, outcome);
         }
 
         Doctor doctor = getCurrentDoctor(authentication);
@@ -195,8 +217,33 @@ public class DoctorPortalController {
         String qual = (doctor != null && doctor.getQualification() != null) ? " (" + doctor.getQualification() + ")" : ", MD";
         String doctorName = prefix + name + qual;
 
-        caseService.doctorVerifyCase(caseId, doctorName, finalNotes);
+        caseService.doctorVerifyCase(caseId, doctorName, finalNotes, diagnosis, treatment, vitals, outcome);
 
         return "redirect:/doctor/case/" + caseId + "?verified=true";
+    }
+
+    // ---------------------------------------------------------
+    // LOG AI SUGGESTION AUDIT (ACCEPT / EDIT / REJECT)
+    // ---------------------------------------------------------
+    @PostMapping("/case/{id}/suggestion-audit")
+    @ResponseBody
+    public org.springframework.http.ResponseEntity<?> logSuggestionAudit(
+            @PathVariable("id") Long caseId,
+            @RequestBody com.example.Health_Data_Management.entity.CaseSuggestionAudit audit,
+            Authentication authentication) {
+
+        Doctor doctor = getCurrentDoctor(authentication);
+        if (doctor != null) {
+            audit.setDoctorId(doctor.getId());
+            if (doctor.getUser() != null) {
+                audit.setDoctorName(doctor.getUser().getName());
+            }
+        }
+        audit.setMedicalCaseId(caseId);
+
+        com.example.Health_Data_Management.entity.CaseSuggestionAudit saved =
+                caseService.logSuggestionAudit(audit);
+
+        return org.springframework.http.ResponseEntity.ok(saved);
     }
 }

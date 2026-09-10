@@ -48,14 +48,21 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        // Upgrade columns to TEXT in database if necessary
+        // Upgrade and ensure columns exist in database
         try (java.sql.Connection conn = dataSource.getConnection();
              java.sql.Statement stmt = conn.createStatement()) {
+            try { stmt.execute("ALTER TABLE medical_cases ADD COLUMN IF NOT EXISTS symptoms TEXT"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE medical_cases ADD COLUMN IF NOT EXISTS diagnosis VARCHAR(500)"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE medical_cases ADD COLUMN IF NOT EXISTS treatment TEXT"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE medical_cases ADD COLUMN IF NOT EXISTS vitals VARCHAR(255)"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE medical_cases ADD COLUMN IF NOT EXISTS outcome VARCHAR(100)"); } catch (SQLException ignored) {}
+
             String[] cols = {
                 "digital_signature", "drug_interactions_json", "dashavidha_assessment",
                 "doctor_clinical_notes", "structured_summary", "medical_timeline",
                 "priority_reason", "red_flags_details", "patient_statement",
-                "associated_symptoms", "past_medical_history", "current_medication", "investigations"
+                "associated_symptoms", "past_medical_history", "current_medication", "investigations",
+                "symptoms", "treatment"
             };
             for (String col : cols) {
                 try {
@@ -66,6 +73,9 @@ public class DataInitializer implements CommandLineRunner {
 
         // Check if demo doctor already exists
         if (userRepository.findByEmail("doctor@medikiosk.com").isPresent()) {
+            Doctor existingDoctor = doctorRepository.findAll().stream().findFirst().orElse(null);
+            seedPastBenchmarkCases(existingDoctor);
+            updateExistingCasesIfEmpty();
             return;
         }
 
@@ -241,7 +251,249 @@ public class DataInitializer implements CommandLineRunner {
         case103.setVerifiedAt(LocalDateTime.now().minusHours(1));
         case103.setDoctorClinicalNotes("BP stable at 124/80 mmHg. Advised continuation of Amlodipine 5 mg OD and salt restriction. Next follow-up in 3 months.");
         case103.setStructuredSummary(summaryService.generateStructuredSummary(case103, List.of()));
-        case103.setMedicalTimeline("2022 | Hypertension diagnosed\n2026 (Today) | Follow-up: Verified and advised maintenance");
+        case103.setSymptoms("Hypertension follow-up, occasional mild dizziness");
+        case103.setDiagnosis("Essential Primary Hypertension (Stage 1)");
+        case103.setTreatment("Tab. Amlodipine 5 mg OD, DASH diet, sodium restriction < 2g/day");
+        case103.setVitals("BP: 124/80 mmHg, HR: 74 bpm, Temp: 98.6°F, SpO2: 99%");
+        case103.setOutcome("Well controlled BP, asymptomatic, routine review in 3 months");
         caseRepository.save(case103);
+
+        seedPastBenchmarkCases(doctor);
+    }
+
+    private void seedPastBenchmarkCases(Doctor doctor) {
+        if (caseRepository.findByCaseNumber("MK-BENCH-01").isPresent()) {
+            return;
+        }
+
+        // Benchmark Case 1: Acute Coronary Syndrome (Unstable Angina)
+        User u1 = userRepository.findByEmail("vikram.sen@example.com").orElseGet(() -> {
+            User u = new User("Vikram Sen", "vikram.sen@example.com", passwordEncoder.encode("patient123"), Role.PATIENT);
+            return userRepository.save(u);
+        });
+        Patient p1 = patientRepository.findByUserId(u1.getId()).orElseGet(() -> {
+            Patient p = new Patient(u1, "P-10081", 52, "Male", "9876540001", "Cardiology", "English");
+            p.setBloodGroup("O+");
+            p.setConsentAccepted(true);
+            return patientRepository.save(p);
+        });
+
+        MedicalCase c1 = new MedicalCase(p1);
+        c1.setCaseNumber("MK-BENCH-01");
+        c1.setTokenNumber(201);
+        c1.setStatus(CaseStatus.VERIFIED);
+        c1.setPriority(CasePriority.CRITICAL);
+        c1.setChiefComplaint("Severe retrosternal chest pain with left arm radiation");
+        c1.setSymptoms("Chest pain, substernal chest discomfort, breathlessness, dyspnea, sweating, diaphoresis");
+        c1.setAssociatedSymptoms("Shortness of breath, diaphoresis, chest tightness");
+        c1.setPastMedicalHistory("Type 2 Diabetes Mellitus (5 yrs), Hyperlipidemia");
+        c1.setCurrentMedication("Metformin 500 mg BD");
+        c1.setDiagnosis("Acute Coronary Syndrome (Unstable Angina)");
+        c1.setTreatment("Tab. Aspirin 325 mg STAT, Clopidogrel 300 mg STAT, Atorvastatin 80 mg, Sublingual Nitroglycerin 0.4 mg PRN, urgent coronary angiography");
+        c1.setVitals("BP: 154/96 mmHg, HR: 98 bpm, Temp: 98.2°F, SpO2: 94%");
+        c1.setOutcome("Stabilized post-PCI with drug-eluting stent to LAD, symptom-free at 30-day review");
+        c1.setDoctor(doctor);
+        c1.setVerifiedByDoctor("Dr. Ananya Roy, MD");
+        c1.setVerifiedAt(LocalDateTime.now().minusDays(12));
+        c1.setDoctorClinicalNotes("Coronary angiography showed 90% stenosis in proximal LAD. Drug eluting stent successfully placed. Advised dual antiplatelet therapy for 12 months.");
+        caseRepository.save(c1);
+
+        // Benchmark Case 2: Gastroesophageal Reflux Disease (GERD)
+        User u2 = userRepository.findByEmail("meera.rao@example.com").orElseGet(() -> {
+            User u = new User("Meera Rao", "meera.rao@example.com", passwordEncoder.encode("patient123"), Role.PATIENT);
+            return userRepository.save(u);
+        });
+        Patient p2 = patientRepository.findByUserId(u2.getId()).orElseGet(() -> {
+            Patient p = new Patient(u2, "P-10082", 44, "Female", "9876540002", "Gastroenterology", "English");
+            p.setBloodGroup("A+");
+            p.setConsentAccepted(true);
+            return patientRepository.save(p);
+        });
+
+        MedicalCase c2 = new MedicalCase(p2);
+        c2.setCaseNumber("MK-BENCH-02");
+        c2.setTokenNumber(202);
+        c2.setStatus(CaseStatus.VERIFIED);
+        c2.setPriority(CasePriority.NORMAL);
+        c2.setChiefComplaint("Burning chest pain and acid taste in mouth");
+        c2.setSymptoms("Burning chest pain, heartburn, acid regurgitation, epigastric discomfort, nausea");
+        c2.setAssociatedSymptoms("Belching, discomfort worsens on lying flat after meals");
+        c2.setPastMedicalHistory("None");
+        c2.setCurrentMedication("Antacid gel SOS");
+        c2.setDiagnosis("Gastroesophageal Reflux Disease (GERD) with Reflux Esophagitis");
+        c2.setTreatment("Cap. Pantoprazole 40 mg OD before breakfast for 4 weeks, Sucralfate suspension 10 ml TDS, head-end bed elevation, avoid late dinners");
+        c2.setVitals("BP: 118/76 mmHg, HR: 72 bpm, Temp: 98.6°F, SpO2: 99%");
+        c2.setOutcome("Complete symptom relief within 7 days. Endoscopy normal, maintenance as needed");
+        c2.setDoctor(doctor);
+        c2.setVerifiedByDoctor("Dr. Ananya Roy, MD");
+        c2.setVerifiedAt(LocalDateTime.now().minusDays(8));
+        c2.setDoctorClinicalNotes("Cardiac causes ruled out via normal ECG and negative Troponin. Classic reflux presentation responsive to PPI therapy.");
+        caseRepository.save(c2);
+
+        // Benchmark Case 3: Acute Bronchial Asthma Exacerbation
+        User u3 = userRepository.findByEmail("rajesh.nair@example.com").orElseGet(() -> {
+            User u = new User("Rajesh Nair", "rajesh.nair@example.com", passwordEncoder.encode("patient123"), Role.PATIENT);
+            return userRepository.save(u);
+        });
+        Patient p3 = patientRepository.findByUserId(u3.getId()).orElseGet(() -> {
+            Patient p = new Patient(u3, "P-10083", 36, "Male", "9876540003", "Pulmonology", "English");
+            p.setBloodGroup("B+");
+            p.setConsentAccepted(true);
+            return patientRepository.save(p);
+        });
+
+        MedicalCase c3 = new MedicalCase(p3);
+        c3.setCaseNumber("MK-BENCH-03");
+        c3.setTokenNumber(203);
+        c3.setStatus(CaseStatus.VERIFIED);
+        c3.setPriority(CasePriority.HIGH);
+        c3.setChiefComplaint("Shortness of breath and wheezing for 2 days");
+        c3.setSymptoms("Shortness of breath, dyspnea, dry cough, wheezing, chest tightness");
+        c3.setAssociatedSymptoms("Nocturnal breathlessness, cough with scanty sputum");
+        c3.setPastMedicalHistory("Bronchial Asthma since childhood, allergic rhinitis");
+        c3.setCurrentMedication("Salbutamol MDI PRN (frequent usage lately)");
+        c3.setDiagnosis("Moderate Acute Exacerbation of Bronchial Asthma");
+        c3.setTreatment("Nebulized Salbutamol 2.5 mg + Ipratropium 0.5 mg STAT, Inhaler Budesonide-Formoterol 200/6 mcg 2 puffs BD, Oral Prednisolone 30 mg daily for 5 days");
+        c3.setVitals("BP: 126/80 mmHg, HR: 104 bpm, Temp: 98.4°F, SpO2: 93%");
+        c3.setOutcome("Bronchospasm relieved, SpO2 improved to 98% on room air, peak flow returned to 88% predicted");
+        c3.setDoctor(doctor);
+        c3.setVerifiedByDoctor("Dr. Ananya Roy, MD");
+        c3.setVerifiedAt(LocalDateTime.now().minusDays(5));
+        c3.setDoctorClinicalNotes("Good clinical response to bronchodilators and systemic steroids. Instructed on proper MDI technique with spacer and asthma action plan.");
+        caseRepository.save(c3);
+
+        // Benchmark Case 4: Acute Febrile Illness / Suspected Dengue
+        User u4 = userRepository.findByEmail("anita.deshmukh@example.com").orElseGet(() -> {
+            User u = new User("Anita Deshmukh", "anita.deshmukh@example.com", passwordEncoder.encode("patient123"), Role.PATIENT);
+            return userRepository.save(u);
+        });
+        Patient p4 = patientRepository.findByUserId(u4.getId()).orElseGet(() -> {
+            Patient p = new Patient(u4, "P-10084", 29, "Female", "9876540004", "General Medicine", "English");
+            p.setBloodGroup("AB+");
+            p.setConsentAccepted(true);
+            return patientRepository.save(p);
+        });
+
+        MedicalCase c4 = new MedicalCase(p4);
+        c4.setCaseNumber("MK-BENCH-04");
+        c4.setTokenNumber(204);
+        c4.setStatus(CaseStatus.VERIFIED);
+        c4.setPriority(CasePriority.NORMAL);
+        c4.setChiefComplaint("High fever with chills and severe headache for 4 days");
+        c4.setSymptoms("High fever, pyrexia, severe headache, retro-orbital pain, fatigue, body ache, chills");
+        c4.setAssociatedSymptoms("Loss of appetite, mild nausea, joint pain");
+        c4.setPastMedicalHistory("None");
+        c4.setCurrentMedication("Paracetamol SOS");
+        c4.setDiagnosis("Acute Viral Febrile Illness (Suspected Dengue without warning signs)");
+        c4.setTreatment("Tab. Paracetamol 650 mg QID PRN, Oral Rehydration Solutions 2.5 - 3 Litres/day, absolute rest, avoid NSAIDs, daily CBC monitoring for platelet count");
+        c4.setVitals("BP: 110/72 mmHg, HR: 86 bpm, Temp: 101.8°F, SpO2: 98%");
+        c4.setOutcome("Fever resolved on day 6, platelet count stable at 185,000/uL, complete functional recovery");
+        c4.setDoctor(doctor);
+        c4.setVerifiedByDoctor("Dr. Ananya Roy, MD");
+        c4.setVerifiedAt(LocalDateTime.now().minusDays(3));
+        c4.setDoctorClinicalNotes("NS1 antigen positive. Hemodynamically stable, hematocrit maintained. No bleeding manifestations. Home management with close OPD review.");
+        caseRepository.save(c4);
+
+        // Benchmark Case 5: Acute Gastroenteritis / Food Poisoning
+        if (caseRepository.findByCaseNumber("MK-BENCH-05").isEmpty()) {
+            User u5 = userRepository.findByEmail("deepak.verma@example.com").orElseGet(() -> {
+                User u = new User("Deepak Verma", "deepak.verma@example.com", passwordEncoder.encode("patient123"), Role.PATIENT);
+                return userRepository.save(u);
+            });
+            Patient p5 = patientRepository.findByUserId(u5.getId()).orElseGet(() -> {
+                Patient p = new Patient(u5, "P-10085", 38, "Male", "9876540005", "Gastroenterology", "Hindi");
+                p.setBloodGroup("O+");
+                p.setConsentAccepted(true);
+                return patientRepository.save(p);
+            });
+
+            MedicalCase c5 = new MedicalCase(p5);
+            c5.setCaseNumber("MK-BENCH-05");
+            c5.setTokenNumber(205);
+            c5.setStatus(CaseStatus.VERIFIED);
+            c5.setPriority(CasePriority.NORMAL);
+            c5.setChiefComplaint("Watery diarrhea and abdominal cramps for 2 days");
+            c5.setSymptoms("Diarrhea, loose stools, abdominal pain, stomach cramps, nausea, vomiting, mild fever, fatigue");
+            c5.setAssociatedSymptoms("Frequent bowel motions after eating outside food, dehydration signs");
+            c5.setPastMedicalHistory("None");
+            c5.setCurrentMedication("ORS solution");
+            c5.setDiagnosis("Acute Infectious Gastroenteritis with Mild Dehydration");
+            c5.setTreatment("Oral Rehydration Salts (ORS) ad libitum, Tab. Rifaximin 400 mg TDS for 3 days, Probiotic capsule (Lactobacillus) BD, Tab. Ondansetron 4 mg SOS for nausea");
+            c5.setVitals("BP: 114/74 mmHg, HR: 84 bpm, Temp: 99.4°F, SpO2: 99%");
+            c5.setOutcome("Complete cessation of loose stools within 48 hours, fully rehydrated");
+            c5.setDoctor(doctor);
+            c5.setVerifiedByDoctor("Dr. Ananya Roy, MD");
+            c5.setVerifiedAt(LocalDateTime.now().minusDays(2));
+            c5.setDoctorClinicalNotes("Stool routine showed no RBCs or ova. Responded quickly to gut-targeted antimicrobial and rehydration therapy.");
+            caseRepository.save(c5);
+        }
+
+        // Benchmark Case 6: Acute Upper Respiratory Tract Infection (URTI) / Viral Pharyngitis
+        if (caseRepository.findByCaseNumber("MK-BENCH-06").isEmpty()) {
+            User u6 = userRepository.findByEmail("pooja.sharma@example.com").orElseGet(() -> {
+                User u = new User("Pooja Sharma", "pooja.sharma@example.com", passwordEncoder.encode("patient123"), Role.PATIENT);
+                return userRepository.save(u);
+            });
+            Patient p6 = patientRepository.findByUserId(u6.getId()).orElseGet(() -> {
+                Patient p = new Patient(u6, "P-10086", 26, "Female", "9876540006", "ENT / General Medicine", "English");
+                p.setBloodGroup("B+");
+                p.setConsentAccepted(true);
+                return patientRepository.save(p);
+            });
+
+            MedicalCase c6 = new MedicalCase(p6);
+            c6.setCaseNumber("MK-BENCH-06");
+            c6.setTokenNumber(206);
+            c6.setStatus(CaseStatus.VERIFIED);
+            c6.setPriority(CasePriority.NORMAL);
+            c6.setChiefComplaint("Sore throat and runny nose with low grade fever for 3 days");
+            c6.setSymptoms("Sore throat, pharyngitis, runny nose, nasal congestion, sneezing, mild cough, low grade fever");
+            c6.setAssociatedSymptoms("Difficulty swallowing, malaise");
+            c6.setPastMedicalHistory("None");
+            c6.setCurrentMedication("Paracetamol 500mg SOS");
+            c6.setDiagnosis("Acute Viral Pharyngitis / Upper Respiratory Tract Infection (URTI)");
+            c6.setTreatment("Warm saline gargles TDS, Tab. Levocetirizine 5 mg + Montelukast 10 mg at bedtime, Paracetamol 650 mg SOS, steam inhalation BD, hydration");
+            c6.setVitals("BP: 116/78 mmHg, HR: 76 bpm, Temp: 99.8°F, SpO2: 99%");
+            c6.setOutcome("Fully recovered in 4 days. COVID-19 rapid antigen test negative");
+            c6.setDoctor(doctor);
+            c6.setVerifiedByDoctor("Dr. Ananya Roy, MD");
+            c6.setVerifiedAt(LocalDateTime.now().minusDays(1));
+            c6.setDoctorClinicalNotes("Erythematous posterior pharynx without tonsillar exudates or cervical lymphadenopathy. Centor score 1. Managed symptomatically.");
+            caseRepository.save(c6);
+        }
+    }
+
+    private void updateExistingCasesIfEmpty() {
+        caseRepository.findByCaseNumber("MK-2026-104").ifPresent(c -> {
+            if (c.getSymptoms() == null) {
+                c.setSymptoms("Chest pain, substernal tightness, left shoulder radiation, shortness of breath, perspiration");
+                c.setVitals("BP: 146/92 mmHg, HR: 98 bpm, Temp: 98.4°F, SpO2: 94%");
+                caseRepository.save(c);
+            }
+        });
+        caseRepository.findByCaseNumber("MK-2026-105").ifPresent(c -> {
+            if (c.getSymptoms() == null) {
+                c.setSymptoms("Fever, dry cough, mild headache, nasal congestion, throat irritation");
+                c.setVitals("BP: 118/78 mmHg, HR: 82 bpm, Temp: 100.2°F, SpO2: 98%");
+                caseRepository.save(c);
+            }
+        });
+        caseRepository.findByCaseNumber("MK-2026-106").ifPresent(c -> {
+            if (c.getSymptoms() == null) {
+                c.setSymptoms("Shortness of breath on exertion, breathlessness, pedal edema, orthopnea");
+                c.setVitals("BP: 158/96 mmHg, HR: 92 bpm, Temp: 98.6°F, SpO2: 92%");
+                caseRepository.save(c);
+            }
+        });
+        caseRepository.findByCaseNumber("MK-2026-103").ifPresent(c -> {
+            if (c.getDiagnosis() == null) {
+                c.setSymptoms("Hypertension follow-up, occasional mild dizziness");
+                c.setDiagnosis("Essential Primary Hypertension (Stage 1)");
+                c.setTreatment("Tab. Amlodipine 5 mg OD, DASH diet, sodium restriction < 2g/day");
+                c.setVitals("BP: 124/80 mmHg, HR: 74 bpm, Temp: 98.6°F, SpO2: 99%");
+                c.setOutcome("Well controlled BP, asymptomatic, routine review in 3 months");
+                caseRepository.save(c);
+            }
+        });
     }
 }

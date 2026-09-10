@@ -24,6 +24,7 @@ public class CaseService {
     private final OCRService ocrService;
     private final DashavidhaService dashavidhaService;
     private final DrugInteractionService drugInteractionService;
+    private final com.example.Health_Data_Management.repository.CaseSuggestionAuditRepository suggestionAuditRepository;
 
     public CaseService(
             MedicalCaseRepository caseRepository,
@@ -34,7 +35,8 @@ public class CaseService {
             SummaryService summaryService,
             OCRService ocrService,
             DashavidhaService dashavidhaService,
-            DrugInteractionService drugInteractionService) {
+            DrugInteractionService drugInteractionService,
+            com.example.Health_Data_Management.repository.CaseSuggestionAuditRepository suggestionAuditRepository) {
         this.caseRepository = caseRepository;
         this.answerRepository = answerRepository;
         this.documentRepository = documentRepository;
@@ -44,6 +46,7 @@ public class CaseService {
         this.ocrService = ocrService;
         this.dashavidhaService = dashavidhaService;
         this.drugInteractionService = drugInteractionService;
+        this.suggestionAuditRepository = suggestionAuditRepository;
     }
 
     @Transactional
@@ -240,6 +243,14 @@ public class CaseService {
     public MedicalCase doctorEditCase(Long caseId, String chiefComplaint, String history, String pastHistory,
                                        String medications, String allergies, String investigations,
                                        String doctorNotes, CasePriority priority) {
+        return doctorEditCase(caseId, chiefComplaint, history, pastHistory, medications, allergies, investigations, doctorNotes, priority, null, null, null, null);
+    }
+
+    @Transactional
+    public MedicalCase doctorEditCase(Long caseId, String chiefComplaint, String history, String pastHistory,
+                                       String medications, String allergies, String investigations,
+                                       String doctorNotes, CasePriority priority,
+                                       String diagnosis, String treatment, String vitals, String outcome) {
         MedicalCase medicalCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
 
@@ -251,6 +262,10 @@ public class CaseService {
         if (investigations != null) medicalCase.setInvestigations(investigations);
         if (doctorNotes != null) medicalCase.setDoctorClinicalNotes(doctorNotes);
         if (priority != null) medicalCase.setPriority(priority);
+        if (diagnosis != null && !diagnosis.isBlank()) medicalCase.setDiagnosis(diagnosis);
+        if (treatment != null && !treatment.isBlank()) medicalCase.setTreatment(treatment);
+        if (vitals != null && !vitals.isBlank()) medicalCase.setVitals(vitals);
+        if (outcome != null && !outcome.isBlank()) medicalCase.setOutcome(outcome);
 
         medicalCase.setDoctorEdited(true);
 
@@ -262,6 +277,12 @@ public class CaseService {
 
     @Transactional
     public MedicalCase doctorVerifyCase(Long caseId, String doctorName, String doctorNotes) {
+        return doctorVerifyCase(caseId, doctorName, doctorNotes, null, null, null, null);
+    }
+
+    @Transactional
+    public MedicalCase doctorVerifyCase(Long caseId, String doctorName, String doctorNotes,
+                                        String diagnosis, String treatment, String vitals, String outcome) {
         MedicalCase medicalCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
 
@@ -271,8 +292,25 @@ public class CaseService {
         if (doctorNotes != null && !doctorNotes.isBlank()) {
             medicalCase.setDoctorClinicalNotes(doctorNotes);
         }
+        if (diagnosis != null && !diagnosis.isBlank()) {
+            medicalCase.setDiagnosis(diagnosis);
+        }
+        if (treatment != null && !treatment.isBlank()) {
+            medicalCase.setTreatment(treatment);
+        }
+        if (vitals != null && !vitals.isBlank()) {
+            medicalCase.setVitals(vitals);
+        }
+        if (outcome != null && !outcome.isBlank()) {
+            medicalCase.setOutcome(outcome);
+        }
 
         return caseRepository.save(medicalCase);
+    }
+
+    @Transactional
+    public com.example.Health_Data_Management.entity.CaseSuggestionAudit logSuggestionAudit(com.example.Health_Data_Management.entity.CaseSuggestionAudit audit) {
+        return suggestionAuditRepository.save(audit);
     }
 
     public MedicalCase getCaseById(Long id) {

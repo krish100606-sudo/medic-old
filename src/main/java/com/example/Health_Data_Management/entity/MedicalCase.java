@@ -106,6 +106,22 @@ public class MedicalCase {
     @Column(name = "digital_signature", columnDefinition = "TEXT")
     private String digitalSignature;
 
+    // ---------------- Structured Clinical Decision Fields ----------------
+    @Column(name = "symptoms", columnDefinition = "TEXT")
+    private String symptoms;
+
+    @Column(name = "diagnosis", length = 500)
+    private String diagnosis;
+
+    @Column(name = "treatment", columnDefinition = "TEXT")
+    private String treatment;
+
+    @Column(name = "vitals", length = 255)
+    private String vitals;
+
+    @Column(name = "outcome", length = 100)
+    private String outcome;
+
     // ---------------- Doctor Verification Fields ----------------
     @Column(name = "is_doctor_edited")
     private boolean isDoctorEdited = false;
@@ -494,5 +510,71 @@ public class MedicalCase {
 
     public String getFormattedCreatedAt() {
         return createdAt != null ? createdAt.toLocalDate().toString() : "";
+    }
+
+    public String getSymptoms() {
+        return symptoms;
+    }
+
+    public void setSymptoms(String symptoms) {
+        this.symptoms = symptoms;
+    }
+
+    public List<String> getSymptomTags() {
+        if (symptoms == null || symptoms.isBlank()) {
+            return new ArrayList<>();
+        }
+        return java.util.Arrays.stream(symptoms.split("[,;\\n]+"))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    public void setSymptomTags(List<String> tags) {
+        if (tags == null || tags.isEmpty()) {
+            this.symptoms = null;
+        } else {
+            this.symptoms = String.join(", ", tags);
+        }
+    }
+
+    public String getDiagnosis() {
+        return diagnosis;
+    }
+
+    public void setDiagnosis(String diagnosis) {
+        this.diagnosis = diagnosis;
+    }
+
+    public String getTreatment() {
+        return treatment;
+    }
+
+    public void setTreatment(String treatment) {
+        this.treatment = treatment;
+    }
+
+    public String getVitals() {
+        return vitals;
+    }
+
+    public void setVitals(String vitals) {
+        this.vitals = vitals;
+    }
+
+    public String getOutcome() {
+        return outcome;
+    }
+
+    public void setOutcome(String outcome) {
+        this.outcome = outcome;
+    }
+
+    public String getNotes() {
+        return doctorClinicalNotes;
+    }
+
+    public void setNotes(String notes) {
+        this.doctorClinicalNotes = notes;
     }
 }
